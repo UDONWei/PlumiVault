@@ -1,0 +1,27 @@
+{
+  "data_dir": "app-data",
+  "model_dir": "offline",
+  "labels_path": "docs/china-birds-ioc12.1-probe.json",
+  "priors_path": "docs/china-birds-occurrence-ioc12.1.json",
+  "text_features": "offline/text_features.pt",
+  "detector_config": "offline/detector-ssdlite.json",
+  "taxonomy_snapshot": null,
+  "threads": 2,
+  "thumbnail_edge": 512,
+  "thumbnail_budget_mb": 1024,
+  "max_files_per_job": 0,
+  "stable_seconds": 60,
+  "roots": [
+    {
+      "id": "sample",
+      "name": "请填写目录名称",
+      "path": "D:/请填写现有照片目录",
+      "context": {
+        "location": "请填写省市区县",
+        "region_code": null,
+        "use_date": true
+      }
+    }
+  ],
+  "require_folder_selection": true
+}

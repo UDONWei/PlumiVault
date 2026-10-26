@@ -1,0 +1,9 @@
+# 已在 Windows CPU 阶段 1 运行，完整依赖见 requirements-windows-stage1.lock.txt。
+# 尚不是 Linux/NAS 部署锁文件，模型/名录仍待用户选定。
+# torch/torchvision 须从官方 CPU index 安装对应 +cpu 构建。
+torch==2.7.1
+torchvision==0.22.1
+pybioclip==2.1.6
+open-clip-torch==2.32.0
+
+pypinyin==0.55.0

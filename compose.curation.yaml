@@ -1,0 +1,41 @@
+# Optional. Never include this file until the user approves original moves.
+# A single parent bind is required: rename across two Docker bind mounts can fail EXDEV.
+services:
+  index:
+    environment:
+      BIRD_ORGANIZER_URL: http://organizer:8766
+  organizer:
+    image: bird-index-nas:0.3.0
+    pull_policy: never
+    platform: linux/amd64
+    user: "${BIRD_UID:?set UID}:${BIRD_GID:?set GID}"
+    command: [python, -B, -m, bird_index.curation]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.5
+    mem_limit: 192m
+    pids_limit: 32
+    secrets: [gateway_token]
+    volumes:
+      - type: bind
+        source: "${BIRD_PHOTO_PARENT:?set common photo parent explicitly}"
+        target: /library
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./data
+        target: /data
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./config
+        target: /config
+        read_only: true
+        bind: {create_host_path: false}
+    tmpfs: ["/tmp:size=16m,noexec,nosuid"]
+    networks: [private]
+    depends_on:
+      index: {condition: service_healthy}
+    healthcheck:
+      disable: true
+    logging: {driver: json-file, options: {max-size: 5m, max-file: "3"}}

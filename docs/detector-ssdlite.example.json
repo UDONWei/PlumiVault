@@ -1,0 +1,11 @@
+{
+  "architecture": "ssdlite320_mobilenet_v3_large",
+  "weights": "ssdlite320_mobilenet_v3_large_coco-a79551df.pth",
+  "source": "https://download.pytorch.org/models/ssdlite320_mobilenet_v3_large_coco-a79551df.pth",
+  "torchvision": "0.22.1",
+  "sha256": "a79551df90c79834bcd3bb3845ef9d966b5449a3a9b2833ae8404778ca5d65d2",
+  "code_license": "BSD-3-Clause",
+  "weights_terms": "Torchvision pretrained weights may have training-data terms; local evaluation only, weights excluded from source package",
+  "input_size": 320,
+  "category": "bird"
+}

@@ -1,0 +1,12 @@
+{
+  "access_evidence": "填写只读 SMB 账户/挂载或本地 ACL 的实际证据；未知请保留未验证",
+  "samples": [
+    {
+      "path": "日期目录/请替换为现有文件.ARW",
+      "truth": null,
+      "scenario": "请填写近鸟/远距离小鸟/逆光/遮挡/相似种/飞行/多鸟/非鸟",
+      "raw_mode": "full",
+      "boxes": []
+    }
+  ]
+}

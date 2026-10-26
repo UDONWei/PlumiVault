@@ -1,0 +1,87 @@
+name: bird-index-nas
+services:
+  index:
+    image: bird-index-nas:0.3.0
+    build: .
+    platform: linux/amd64
+    user: "${BIRD_UID:?set NAS user UID}:${BIRD_GID:?set NAS user GID}"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 2.0
+    mem_limit: 6g
+    pids_limit: 256
+    stop_grace_period: 30s
+    environment:
+      BIRD_LISTEN_HOST: 0.0.0.0
+      BIRD_PUBLIC_ORIGIN: "https://${BIRD_BIND_IP:?set NAS LAN IP}:8443"
+      BIRD_GATEWAY_TOKEN_FILE: /run/secrets/gateway_token
+    secrets: [gateway_token]
+    volumes:
+      - type: bind
+        source: "${BIRD_PHOTOS_PATH:?set existing photo directory}"
+        target: /photos
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./data
+        target: /data
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./models
+        target: /models
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./config
+        target: /config
+        read_only: true
+        bind: {create_host_path: false}
+    tmpfs: ["/tmp:size=128m,noexec,nosuid"]
+    networks: [private]
+    logging: {driver: json-file, options: {max-size: 5m, max-file: "3"}}
+  gateway:
+    image: caddy:2.11.7-alpine
+    platform: linux/amd64
+    user: "${BIRD_UID:?set NAS user UID}:${BIRD_GID:?set NAS user GID}"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    # The official Caddy binary has cap_net_bind_service=ep; keep it in the bounding set.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 192m
+    pids_limit: 64
+    depends_on:
+      index: {condition: service_healthy}
+    ports: ["${BIRD_BIND_IP:?set NAS LAN IP}:8443:8443"]
+    environment:
+      BIRD_SITE_ADDRESS: "https://${BIRD_BIND_IP:?set NAS LAN IP}:8443"
+      BIRD_TLS_SERVER_NAME: "${BIRD_BIND_IP:?set NAS LAN IP}"
+      BIRD_AUTH_HASH: "${BIRD_AUTH_HASH:?set bcrypt password hash}"
+    secrets: [gateway_token]
+    entrypoint: [sh, /etc/caddy/start.sh]
+    volumes:
+      - type: bind
+        source: ./deploy/gateway
+        target: /etc/caddy
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./gateway-data
+        target: /data
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./gateway-config
+        target: /config
+        bind: {create_host_path: false}
+    tmpfs: ["/tmp:size=16m,noexec,nosuid"]
+    networks: [private, ingress]
+    logging: {driver: json-file, options: {max-size: 5m, max-file: "3"}}
+networks:
+  private: {internal: true}
+  ingress: {}
+secrets:
+  gateway_token: {file: ./config/gateway-token}

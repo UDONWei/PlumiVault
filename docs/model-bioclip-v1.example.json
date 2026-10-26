@@ -1,0 +1,9 @@
+{
+  "model_id": "imageomics/bioclip",
+  "revision": "ce901ab3c6a913f9e9ef94ce6d27761069f4f01c",
+  "weights": "open_clip_pytorch_model.bin",
+  "sha256": "e380384f0c30d425d8c6c40f24471f9dd497fbdfa734a89c461a94aee95f0ef4",
+  "license": "MIT (official model card)",
+  "source": "https://huggingface.co/imageomics/bioclip",
+  "local_verified": false
+}

@@ -1,0 +1,18 @@
+'use strict';
+const assert=require('node:assert/strict'),api=require('../tools/manual_review.js');
+const data={review_batch_id:'test',labels:[{kind:'bird',scientific_name:'bird-a'},{kind:'bird',scientific_name:'bird-b'},{kind:'control',scientific_name:'control'}],rows:Array.from({length:4},(_,i)=>({path:'photo-'+i,before:{sha256:'fingerprint-'+i}}))};
+const storage={getItem:()=>null,setItem:()=>{}},store=api.createStore(data,storage);
+store.toggle(1,'bird-b');store.setStatus(2,'uncertain');
+const before=store.document();
+assert.throws(()=>store.confirmMany([0,20],'bird-a'));assert.deepEqual(store.document(),before);
+assert.throws(()=>store.confirmMany([0,0],'bird-a'));assert.deepEqual(store.document(),before);
+assert.throws(()=>store.confirmMany([0],'control'));assert.deepEqual(store.document(),before);
+assert.equal(store.confirmMany([0,1,2,3],'bird-a'),2);
+assert.deepEqual(store.get(1),before.photos[1]);assert.deepEqual(store.get(2),before.photos[2]);
+assert.equal(store.undoInfo().canUndo,true);assert.equal(store.undoLastBatch(),2);assert.deepEqual(store.document(),before);
+store.confirmMany([0,3],'bird-a');store.setStatus(2,'none_match');assert.equal(store.undoLastBatch(),2);assert.equal(store.get(2).status,'none_match');assert.equal(store.get(0).status,'unreviewed');
+store.confirmMany([0,3],'bird-a');store.toggle(0,'bird-b');const changed=store.document();
+assert.equal(store.undoInfo().canUndo,false);assert.throws(()=>store.undoLastBatch());assert.deepEqual(store.document(),changed);
+store.importDocument(before);assert.equal(store.undoInfo().count,0);
+assert.throws(()=>store.confirmMany([1,2],'bird-a'));assert.deepEqual(store.document(),before);
+console.log('Batch confirmation checks passed: no overwrite of human decisions, atomic validation, exact undo, unrelated edits retained, conflicting undo refused.');

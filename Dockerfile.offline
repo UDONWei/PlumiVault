@@ -1,0 +1,24 @@
+FROM python:3.12.14-slim-bookworm
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONUTF8=1 \
+    HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 \
+    OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /app
+COPY tools/verify_offline_dependencies.py ./tools/verify_offline_dependencies.py
+# BuildKit mounts are read-only and do not retain wheel/deb copies in the image.
+RUN --network=none --mount=type=bind,source=offline-build,target=/offline \
+    python tools/verify_offline_dependencies.py /offline \
+    && dpkg -i /offline/debs/*.deb \
+    && python -m pip install --no-cache-dir --no-index --find-links=/offline/wheels \
+       --require-hashes -r /offline/requirements.offline.lock.txt \
+    && python -m pip check
+RUN --network=none python -c "import torch,torchvision,rawpy,PIL,numpy,bioclip,pypinyin; assert torch.__version__=='2.7.1+cpu'; assert torchvision.__version__=='0.22.1+cpu'; assert not torch.cuda.is_available(); print('CPU imports OK; LibRaw:',rawpy.libraw_version)"
+COPY bird_index/ ./bird_index/
+COPY tools/ ./tools/
+COPY web/ ./web/
+COPY docs/ ./docs/
+USER 1000:1000
+EXPOSE 8765
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health',timeout=3).read()"
+CMD ["python", "-B", "-m", "bird_index", "serve", "--config", "/config/config.json", "--port", "8765"]

@@ -1,0 +1,12 @@
+services:
+  index:
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile.offline
+      network: none
+      pull: false
+  gateway:
+    pull_policy: never
+    # Also fixes existing nas-r1 installs whose base compose predates this change.
+    cap_add: [NET_BIND_SERVICE]

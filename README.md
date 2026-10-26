@@ -1,2 +1,37 @@
-PlumiVault · A Docker-based bird photo management application for NAS.
-翎匣 · 基于Docker的NAS鸟类图片管理应用。
+# 翎匣 · PlumiVault
+
+面向个人 NAS 的鸟类照片索引与初筛程序。Python 后端、浏览器工作台，默认在 NAS 上使用 CPU 本地识别。支持 Sony A7R IV 压缩 ARW，以及 JPEG、PNG、TIFF、WebP、BMP 等普通图片。
+
+PlumiVault is a local-first bird photo indexing and culling application for NAS, with a browser interface and CPU inference. Photos stay on your own devices.
+
+## 已有功能
+
+- 手选拍摄目录、递归发现、扫描前列出新增和更新文件，跳过已完成且未变化的照片。
+- BioCLIP 鸟种候选、自动主体框、地区与日期辅助、中文与拼音搜索、独立人工确认。
+- 大图与底部缩略图栏，滚轮横移、Ctrl/Shift 多选、批量标记与星级、目录/鸟种/分数筛选。
+- 主体框调整、缩放、亮度/对比度/高光/阴影调整，用于预览和再次识别，保留原文件。
+- 技术质量参考分与问题提示、可恢复隐藏、连续同种照片组内展开与收拢。
+- 数据库备份、任务进度、空闲释放识别进程，受限的浏览器原图预览缓存。
+- 可选独立整理服务：清单预览并确认后，移至待删除目录或恢复；不永久删除，不自动清空。
+
+## 使用边界
+
+索引服务对原图只读，缩略图和数据库在独立目录。正常识别不调用外部图片 API。可选整理服务需要另外授权写权限；仅由用户确认移动已索引照片，不修改 EXIF，不跨盘复制。
+
+候选分数不是正确概率。当前质量分是技术参考，不能等同鸟眼对焦、遮挡判断或姿态审美。专门模型仍在评估，不参与生产评分。没有可靠鸟体检测也不代表确定没有鸟。
+
+## 开始使用
+
+1. 阅读 [模型准备](docs/MODEL_SETUP.md)，自行取得模型权重并核对 SHA-256。仓库不提供权重。
+2. 按 [NAS 部署](docs/NAS_DEPLOYMENT.md) 配置 Docker、照片只读挂载及 HTTPS 网关；离线依赖见 [离线构建](docs/NAS_OFFLINE_BUILD.md)。
+3. 在网页手动选择一个小目录，先检查变更清单，再提交任务。参见 [使用说明](docs/USER_GUIDE.md)。程序不会自动扫描整库。
+
+开发与测试见 [开发说明](docs/DEVELOPMENT.md)，实现状态与未完成项见 [STATUS.md](STATUS.md)。保留 `bird_index`、`bird-index-nas` 等技术标识，以兼容现有安装和数据库。
+
+## 公开仓库范围与许可
+
+只发布经过清理的源码、合成测试、示例配置、文档及有明确许可的数据。照片、缩略图、图库数据库、账号、凭据、真实安装配置、个人测试报告、离线安装包和模型权重均不发布。
+
+中国观鸟记录中心名录快照及派生对照表未随仓库分发，默认使用附带的 CC0 历史参考数据；可自行配置合法取得的名录。
+
+项目自身代码的许可尚未选定；公开可见不代表已经授予任意再分发许可。第三方组件和数据各自的许可见 [来源说明](docs/SOURCES.md) 及 [第三方声明](docs/third-party/)。

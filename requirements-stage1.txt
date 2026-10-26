@@ -1,0 +1,6 @@
+# Windows 阶段 1 的解码工具；完整实际依赖另记 lock 文件。
+rawpy==0.25.1
+Pillow==12.3.0
+numpy==2.3.5
+psutil==7.1.0
+ExifRead==3.5.1

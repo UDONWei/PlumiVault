@@ -1,0 +1,18 @@
+{
+    admin off
+    auto_https disable_redirects
+    default_sni {$BIRD_TLS_SERVER_NAME:192.0.2.10}
+}
+{$BIRD_SITE_ADDRESS} {
+    tls internal
+    basic_auth {
+        bird {$BIRD_AUTH_HASH}
+    }
+    request_body {
+        max_size 8MB
+    }
+    reverse_proxy index:8765 {
+        header_up X-Bird-Gateway {$BIRD_GATEWAY_TOKEN}
+        header_up Host {hostport}
+    }
+}

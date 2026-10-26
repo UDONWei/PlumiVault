@@ -1,0 +1,14 @@
+'use strict';
+const assert=require('node:assert/strict'),api=require('../tools/manual_review.js');
+const labels=[{kind:'bird',scientific_name:'bird-a',zh_name:'旧名',birdreport:{version:'CH4',id:1,zh_name:'新名'}},{kind:'bird',scientific_name:'bird-b'}];
+const data={review_batch_id:'fixture',labels,rows:[0,1].map(i=>({path:'photo-'+i,before:{sha256:'hash-'+i}})),taxonomy:{version:'CH4'}};
+const values=new Map(),storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},s=api.createStore(data,storage);
+s.toggle(0,'bird-a');s.toggle(0,'bird-b');const multi=s.get(0);s.confirmOne(0,'bird-a');assert.equal(s.get(0).species.length,1);s.undoLast();assert.deepEqual(s.get(0),multi);
+s.setStatus(0,'no_bird');assert.equal(s.get(0).species.length,0);const doc=s.document();assert.equal(doc.schema,'bird-manual-review-v2');assert.equal(api.createStore(data,storage).get(0).status,'no_bird');
+s.undoLast();assert.deepEqual(s.get(0),multi);s.setStatus(1,'none_match');assert.equal(s.get(1).status,'none_match');s.undoLast();assert.equal(s.get(1).status,'unreviewed');
+s.confirmOne(1,'bird-a');const exported=s.document();assert.equal(exported.photos[1].species[0].scientific_name,'bird-a');assert.equal(exported.photos[1].species[0].zh_name,'旧名');assert.equal(exported.photos[1].species[0].birdreport.zh_name,'新名');
+const bad=JSON.parse(JSON.stringify(exported));bad.photos[1].status='no_bird';assert.throws(()=>s.importDocument(bad));assert.deepEqual(s.document(),exported);
+const legacy={...exported,schema:'bird-manual-review-v1'};s.importDocument(legacy);assert.equal(s.get(1).status,'confirmed');assert.equal(s.historyInfo().count,0);
+const key=s.key,broken=new Map([[key,'broken user record']]),blocked={getItem:k=>broken.get(k)||null,setItem:(k,v)=>broken.set(k,v)};
+const recovered=api.createStore({...data,initial_manual_review:legacy},blocked);recovered.confirmOne(1,'bird-b');assert.equal(broken.get(key),'broken user record');assert.equal(recovered.info().persisted,false);
+console.log('Quick review core passed: no-bird distinct/export/restore, exclusive pick, multi-species undo, old-schema import, original IDs, invalid cache preserved.');

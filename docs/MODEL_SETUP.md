@@ -13,6 +13,8 @@ python -B -c "import sys; from pathlib import Path; sys.path.insert(0,'tools'); 
 
 NAS 的 models 目录应包含 model.json、BioCLIP 权重、detector-ssdlite.json、SSDLite 权重、text_features.pt。可从自己的准备电脑上传这些文件至自己的 NAS，但不要提交 Git 或公开发布。更换标签或模型后必须重新生成匹配的文本特征。
 
+标签文件以字节 SHA-256 绑定文本特征缓存；.gitattributes 对该文件禁用换行转换，保留原 NAS 使用的文件字节。不要因格式化或换行转换而无意修改标签文件。若曾按初次 GitHub 清理版生成文本特征，更新到 r9 后需按第 4 步重建一次；已有 NAS 的原版缓存保持兼容。
+
 taxonomy_snapshot 默认 null。可选名录需要使用者另行合法取得，并在私人配置中填写容器内路径。仓库不附带中国观鸟记录中心名录或派生表；没有此文件也能使用历史 CC0 标签进行识别。
 
 模型卡、代码许可和训练数据条款各自适用，见 SOURCES.md。下载失败时保留校验结果排查，不用不同模型冒充同一权重。

@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
   try:
    parsed=urllib.parse.urlsplit(self.path);path=urllib.parse.unquote(parsed.path);q={k:v[-1] for k,v in urllib.parse.parse_qs(parsed.query).items()};lib=self.server.lib
    if path=='/':return self.send(200,(PROJECT/'web/index.html').read_bytes(),'text/html; charset=utf-8')
-   if path in ('/app.js','/app.css','/editor.js','/preview-cache.js','/editor-math.js','/search.js','/studio.js','/studio-strip.js','/studio.css','/progress.js'):
+   if path in ('/app.js','/app.css','/editor.js','/preview-cache.js','/editor-math.js','/search.js','/studio.js','/studio-strip.js','/validation.js','/studio.css','/progress.js'):
     return self.send(200,(PROJECT/'web'/path[1:]).read_bytes(),'text/javascript; charset=utf-8' if path.endswith('.js') else 'text/css; charset=utf-8')
    if path.startswith('/thumbs/'):
     name=path.removeprefix('/thumbs/')
@@ -56,6 +56,12 @@ class Handler(BaseHTTPRequestHandler):
     if '/' in name or not name.endswith('.sqlite3'):raise ValueError('备份地址无效')
     return self.send(200,safe_file(lib.db.data/'backups',name).read_bytes(),'application/vnd.sqlite3',name)
    if path=='/api/state':return self.send(200,{'token':self.server.token,**lib.summary()})
+   if path=='/api/validation':
+    from .validation import read
+    return self.send(200,read(lib))
+   if path=='/api/export/validation':
+    from .validation import export
+    return self.send(200,export(lib),download='plumivault-quality-validation.json')
    if path=='/api/labels':return self.send(200,{'items':list(lib.labels().values())})
    if path=='/api/folders':return self.send(200,folders.listing(lib,q['root'],q.get('parent',''),q.get('offset',0),q.get('sort','date_desc')))
    if path=='/api/library-folders':return self.send(200,{'items':folders.catalog(lib)})
@@ -95,7 +101,10 @@ class Handler(BaseHTTPRequestHandler):
    size=int(self.headers.get('Content-Length','0'))
    if not 0<size<=8*1024**2 or self.headers.get('Transfer-Encoding'):self.close_connection=True;raise ValueError('请求大小无效或超出 8 MiB')
    value=json.loads(self.rfile.read(size),parse_constant=lambda s:(_ for _ in ()).throw(ValueError('不允许非有限数值')));path=urllib.parse.urlsplit(self.path).path;lib=self.server.lib
-   if path=='/api/review':result=lib.db.review(value['items'],value['status'],value['species'],value.get('only_unreviewed',False))
+   if path=='/api/validation':
+    from .validation import change
+    result=change(lib,value)
+   elif path=='/api/review':result=lib.db.review(value['items'],value['status'],value['species'],value.get('only_unreviewed',False))
    elif path=='/api/selection':
     from .selection import set_selection
     result=set_selection(lib.db,value['items'],value['flag'],value['rating'])

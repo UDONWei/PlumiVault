@@ -31,6 +31,7 @@
     "bird_index/selection.py",
     "bird_index/server.py",
     "bird_index/thumbs.py",
+    "bird_index/validation.py",
     "bird_index/visibility.py",
     "bird_index/worker.py",
     "compose.curation.yaml",
@@ -59,6 +60,7 @@
     "docs/REQUIREMENTS.md",
     "docs/SOURCES.md",
     "docs/USER_GUIDE.md",
+    "docs/VALIDATION_SAMPLES.md",
     "docs/VERIFICATION_PLAN.md",
     "docs/china-birds-ioc12.1-probe.json",
     "docs/china-birds-occurrence-ioc12.1.json",
@@ -90,6 +92,7 @@
     "tests/check_quick_review_core.js",
     "tests/check_studio_strip.js",
     "tests/check_studio_thumbnails.js",
+    "tests/check_validation.js",
     "tests/test_context.py",
     "tests/test_crop_preview.py",
     "tests/test_culling.py",
@@ -108,6 +111,7 @@
     "tests/test_subject.py",
     "tests/test_taxon_catalog.py",
     "tests/test_unlimited.py",
+    "tests/test_validation.py",
     "tools/build_context_review.py",
     "tools/build_occurrence_data.py",
     "tools/check_deployment.py",
@@ -148,6 +152,7 @@
     "web/search.js",
     "web/studio-strip.js",
     "web/studio.css",
-    "web/studio.js"
+    "web/studio.js",
+    "web/validation.js"
   ]
 }

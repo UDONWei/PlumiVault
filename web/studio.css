@@ -29,3 +29,6 @@ body.studio-focus{padding:8px 18px}.studio-focus #notice{margin:4px 0;padding:5p
 
 /* r8: explicit multi-selection; pointer actions preserve strip position. */
 .filmstrip{scroll-behavior:auto;overflow-anchor:none}.film-item{user-select:none}.film-item.multi-selected{box-shadow:inset 0 0 0 2px #78bce8;border-color:#78bce8}.film-item>button.film-group{font-size:11px;line-height:1.3;margin-top:5px;padding:4px;background:#344451;color:#e7eff7;border-radius:4px}.film-hidden{color:#dfc6ff}.film-group-note{color:#9ebbd7}.studio-tools select{max-width:100px}
+
+/* Validation labels are private metadata, laid out in normal flow. */
+.validation-panel{padding:8px 12px;background:#263530;margin:6px 0}.validation-panel summary{cursor:pointer}.validation-panel input,.validation-panel select{max-width:100%;margin:4px}.validation-panel p{margin:5px 0}.validation-labels{border-top:1px solid #51685b;margin-top:10px;padding-top:6px}.validation-labels select,.validation-labels input{display:block;width:100%;box-sizing:border-box;margin:5px 0}.film-validation{color:#8fd9f0}

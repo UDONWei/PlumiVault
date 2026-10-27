@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.sh text eol=lf
 *.ps1 text eol=lf
+# Text-feature caches pin the exact label-file bytes, including line endings.
+docs/china-birds-ioc12.1-probe.json -text

@@ -38,6 +38,7 @@ function init(options){
  const controls=el('div',undefined,'studio-filters');controls.append(select('s-flag','标记',[['','所有标记'],['keep','保留'],['reject','待剔除'],['none','未标记']]),select('s-rating','星级至少',[['','不限'],...[1,2,3,4,5].map(x=>[x,'★'.repeat(x)])]),field('s-min','参考分最低','number'),field('s-max','参考分最高','number'),select('s-quality','质量提示',[['','全部'],['issues','有待复核问题'],['unscored','尚未评分']]),select('s-sort','排序',[['','拍摄索引顺序'],['score','参考分从高到低']]),select('s-storage','原片位置',[['','原目录'],['quarantined','待删除 · 可恢复']]),select('s-visibility','显示范围',[['visible','未隐藏'],['hidden','仅隐藏'],['all','全部（含隐藏）']]));
  controls.append(btn('应用筛选',()=>{S.offset=0;return refresh();}),btn('清除初筛条件',()=>{for(const id of ['s-flag','s-rating','s-min','s-max','s-quality','s-sort','s-storage'])$(id).value='';$('s-visibility').value='visible';S.offset=0;return refresh();}));const filterDetails=el('details',undefined,'studio-filter-details');filterDetails.append(el('summary','筛选：标记、星级、参考分、隐藏与原片位置'),controls);root.append(filterDetails);
  const tools=el('div',undefined,'studio-tools'),all=el('input');all.type='checkbox';all.id='s-select-page';all.onchange=()=>{S.selected=all.checked?new Set(visiblePhotos().map(p=>p.id)):new Set();strip();};const allLabel=el('label');allLabel.append(all,el('span','全选显示的小图'));tools.append(allLabel,btn('勾选图标记保留',()=>markMany('keep')),btn('勾选图标记待剔除',()=>markMany('reject')),btn('勾选图清除标记',()=>markMany('none')),select('s-batch-rating','批量星级',Array.from({length:6},(_,i)=>[String(i),i?i+' 星':'无星'])),btn('应用星级',()=>rateMany()),btn('隐藏勾选图',()=>visibilityMany(true)),btn('恢复显示勾选图',()=>visibilityMany(false)),btn('仅评分勾选图',scoreMany),btn('批量移至待删除',()=>plan('move'),'danger'),btn('恢复勾选原片',()=>plan('restore')));const report=el('a','下载最近任务验证报告','button');report.href='/api/acceptance';tools.append(report,el('span','', 'studio-count'));root.append(tools);
+ window.BirdValidation?.init({container:root,api:options.api,error:options.error,message:options.message,selected,repaint:()=>{side();strip();},view:validationView});
  const layout=el('div',undefined,'studio-layout'),stage=el('div',undefined,'studio-stage'),nav=el('div',undefined,'studio-nav');nav.append(btn('← 上一张',()=>move(-1)),el('strong',''),btn('下一张 →',()=>move(1)),btn('加载原图预览',original),btn('缩放 / 框选 / 调整',editor));nav.children[1].id='s-progress';stage.append(nav);
  const image=el('img');image.id='s-image';image.alt='当前照片（仅在你的浏览器显示）';stage.append(image);const caption=el('div');caption.id='s-caption';stage.append(caption);
  const right=el('aside',undefined,'studio-side');right.id='s-side';const shell=el('section',undefined,'studio-side-shell');shell.id='s-side-shell';shell.setAttribute('aria-label','照片初筛 · 标记与鸟种');shell.append(right);layout.append(stage,shell);root.append(layout);
@@ -55,6 +56,11 @@ async function refresh(){
  const previous=current()?.id;S.items=result.items;S.groups=result.bursts||[];S.expanded=new Set([...S.expanded].filter(key=>S.groups.some(g=>g.key===key)));S.anchor=null;S.total=result.total;S.at=Math.max(0,S.items.findIndex(p=>p.id===previous));S.selected.clear();const currentGroup=S.groups.find(g=>g.ids.includes(current()?.id));if(currentGroup&&currentGroup.ids[0]!==current()?.id)S.expanded.add(currentGroup.key);$('s-select-page').checked=false;
  $('studio').hidden=false;$('gallery').hidden=true;$('pagination').hidden=true;$('review-bar').hidden=true;
  $('s-filter-status').textContent=$('list-summary').textContent=(S.bird?'筛选鸟种：'+S.options.name(S.bird)+' · ':'')+'匹配 '+result.matched_photos+' 张';$('s-pages').textContent=(Math.floor(S.offset/100)+1)+' / '+Math.max(1,Math.ceil(S.total/100));$('export-csv').href='/api/export/csv?'+new URLSearchParams(S.options.filters());strip();display();
+}
+async function validationView(group){
+ if(S.busy)return;const sequence=++S.seq,result=await S.options.api('/api/photos?ids='+group.samples.map(p=>p.id).join(','));if(sequence!==S.seq)return;
+ S.items=result.items;S.groups=[];S.expanded.clear();S.selected.clear();S.anchor=null;S.at=0;S.offset=0;S.total=S.items.length;
+ $('s-filter-status').textContent='正在查看验证组：'+group.name+' · '+S.total+' 张（应用筛选返回图库）';$('s-pages').textContent='验证组 · 1 / 1';display();strip();
 }
 function visiblePhotos(){return window.StudioStrip.visible(S.items,S.groups,S.expanded);}
 function choosePhoto(id,event={}){
@@ -74,8 +80,10 @@ function strip(reveal=false){
   const b=btn('',event=>choosePhoto(p.id,event)),img=el('img');img.alt=p.relative_path;img.loading='lazy';if(p.thumbnail)img.src=p.thumbnail;b.append(img);
   const q=p.quality?.score,selection=p.selection||{};card.append(check,b,el('small',p.relative_path.split('/').pop()),el('span',({keep:'✓ 保留',reject:'× 待剔除'}[selection.flag]||'未标记')+' '+('★'.repeat(selection.rating||0))+(q!==undefined?' · '+q+' 分':'')));
   card.append(el('span',birdTitle(p),'film-species'),el('span',issueTitle(p),'film-issues'));card.title=birdTitle(p)+' · '+issueTitle(p);
+  const validationBadge=window.BirdValidation?.badge(p.id);if(validationBadge)card.append(el('span',validationBadge,'film-validation'));
   if(p.visibility?.hidden)card.append(el('span','已隐藏','film-hidden'));
   if(group&&group.count>1){
+   card.append(btn('勾选本页组 · '+group.ids.length+' 张',()=>{if(S.busy)return;S.expanded.add(group.key);S.selected=new Set(group.ids);S.anchor=group.ids[0];strip();S.options.message('已勾选当前页/筛选内 '+group.ids.length+' 张；此连续组共 '+group.count+' 张，其他页或被筛选的照片未加入。');},'film-group'));
    if(group.ids.length>1){const expanded=S.expanded.has(group.key),label=(expanded?'收拢组':'展开组')+' · '+group.ids.length+' 张'+(group.ids.length<group.matched_count?'（当前页 / '+group.matched_count+'）':'');
     card.append(btn(label,()=>{if(S.busy)return;if(expanded){S.expanded.delete(group.key);if(group.ids.includes(current()?.id))S.at=S.items.findIndex(p=>p.id===group.ids[0]);}else S.expanded.add(group.key);
      const visible=new Set(visiblePhotos().map(p=>p.id));S.selected=new Set([...S.selected].filter(id=>visible.has(id)));if(!visible.has(S.anchor))S.anchor=null;display();strip();},'film-group'));
@@ -96,6 +104,7 @@ function side(){
  right.append(el('h3',birdTitle(p)),el('p',issueTitle(p),'quality-issue'),el('p',({none:'未标记',keep:'✓ 保留',reject:'× 待剔除'}[sel.flag])+' · '+sel.rating+' 星'));
  const marks=el('div',undefined,'studio-buttons');for(const [text,flag] of [['保留 P','keep'],['待剔除 X','reject'],['清除 U','none']])marks.append(btn(text,()=>mark(p,flag,null),flag===sel.flag?'selected':''));right.append(marks);
  const stars=el('div',undefined,'studio-buttons');for(let i=0;i<=5;i++)stars.append(btn(i===0?'无星':i+'★',()=>mark(p,null,i),i===sel.rating?'selected':''));right.append(stars);
+ window.BirdValidation?.side(right,p);
  const q=p.quality;right.append(el('h3',q?'技术参考分 '+q.score+' / 100':'尚未评分'));right.append(el('small','鸟眼对焦、遮挡和姿态美观：专门模型评估中，尚未上线；当前分数不包含这些结论。'));
  if(q){right.append(el('small','清晰度 '+(q.clarity??'未知')+' · 曝光 '+q.exposure+' · 构图 '+(q.composition??'未知')));for(const text of q.issues)right.append(el('p',text,'quality-issue'));right.append(el('small',q.limits));}
  else right.append(el('small','勾选后补评分；新处理照片复用解码自动评分。未校准，不依据分数自动删除。'));

@@ -9,6 +9,8 @@ config/
 config.local.json
 config.desktop.json
 desktop-scope.json
+plumivault-quality-validation*.json
+plumivault-eye-review*.json
 app-data/
 data/
 models/

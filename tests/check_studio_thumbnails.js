@@ -1,7 +1,7 @@
 'use strict';
 // Exercise real thumbnail click handlers with synthetic metadata; no image or network reads.
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
-const nodes=new Map(),errors=[],calls=[],progress=[];let failScore=true,bursts=[];
+const nodes=new Map(),errors=[],calls=[],progress=[];let failScore=true,bursts=[],validationOptions;
 const descendants=n=>n.children.flatMap(c=>[c,...descendants(c)]);
 class Element{
  constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.attrs={};this.events={};this.className='';this.textContent='';this.value='';this.checked=false;this.hidden=false;this.offsetLeft=0;this.clientWidth=100;this.classList={add:()=>{},remove:()=>{},toggle:()=>{}};}
@@ -20,9 +20,11 @@ for(const id of ['studio','quick','gallery','pagination','review-bar','list-summ
 const photos=Array.from({length:10},(_,i)=>({id:i+1,relative_path:`synthetic/${i+1}.jpg`,date:'2026-01-01',context:{location:'合成测试'},thumbnail:`/synthetic/${i+1}.jpg`,sha256:String(i+1).repeat(64),manual:{status:'confirmed',species:['Bird alpha'],revision:1},candidates:[],selection:{flag:'none',rating:0,revision:0}}));
 const context={window:{BirdProgress:{begin:(title,total)=>{const row={title,total,done:0};progress.push(row);return {update:value=>Object.assign(row,value),finish:error=>{row.error=error?.message||null;}};}},BirdSearch:{bind:()=>{}},BirdEditor:{isOpen:()=>false}},document:{body,getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),addEventListener:()=>{}},matchMedia:()=>({matches:false}),URL:{revokeObjectURL:()=>{}},URLSearchParams,Promise,console};
 const api=async(url,value)=>{calls.push({url,value});if(url==='/api/library-folders')return {items:[{root_id:'fixture',root_name:'测试',path:'synthetic',count:photos.length}]};if(url.startsWith('/api/library?')){const scope=new URLSearchParams(url.split('?')[1]).get('visibility')||'visible';const visible=photos.filter(p=>scope==='all'||!!p.visibility?.hidden===(scope==='hidden'));return {items:structuredClone(visible),total:visible.length,matched_photos:visible.length,bursts:bursts.map(g=>({...g,ids:g.ids.filter(id=>visible.some(p=>p.id===id))}))};}if(url==='/api/visibility')return {records:value.items.map(item=>{const p=photos.find(p=>p.id===item.id);p.visibility={photo_id:p.id,hidden:value.hidden,revision:item.revision+1};return p.visibility;})};if(url==='/api/selection')return {records:value.items.map(item=>{const p=photos.find(p=>p.id===item.id);p.selection={photo_id:p.id,flag:value.flag??p.selection.flag,rating:value.rating??p.selection.rating,revision:item.revision+1};return p.selection;})};if(url==='/api/curation-status')return {enabled:true,scope:'indexed_root',max_batch:100,pending:[]};
+if(url.startsWith('/api/photos?ids='))return {items:structuredClone(photos.filter(p=>url.split('=')[1].split(',').map(Number).includes(p.id)))};
 if(url==='/api/curation-plan')return {plan_id:'synthetic-plan',action:value.action,destination_display:'synthetic quarantine',items:value.ids.map(id=>({source:'synthetic/'+id+'.jpg',destination:'synthetic quarantine/'+id+'.jpg'}))};
 if(url==='/api/curation-commit')return {results:photos.map(p=>({photo_id:p.id,ok:true})),needs_recovery:false};
 if(url==='/api/quality'){if(failScore&&value.photo_id===2)throw Error('synthetic score failure');return {quality:{score:70,issues:[],exposure:70,limits:'synthetic only'}};}throw Error('Unexpected request '+url);};
+context.window.BirdValidation={init:options=>validationOptions=options,side:()=>{},badge:()=>''};
 vm.createContext(context);vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[2]),'studio-strip.js'),'utf8'),context);vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
 (async()=>{
  const app=context.window.BirdStudio;app.init({api,name:id=>id,birds:()=>[],filters:()=>app.filters(),token:()=>'',message:()=>{},error:e=>errors.push(e.message),summary:async()=>{}});await app.refresh();
@@ -86,6 +88,14 @@ vm.createContext(context);vm.runInContext(fs.readFileSync(require('path').join(r
  const hiddenAll=nodes.get('s-select-page');hiddenAll.checked=true;hiddenAll.onchange();
  await descendants(body).find(n=>n.textContent==='恢复显示勾选图').onclick();assert.equal(app.state.total,0);
  nodes.get('s-visibility').value='visible';await app.refresh();assert.equal(app.state.total,13);assert.equal(photos[0].selection.rating,3);
+ // Explicit group selection expands only current-page members, never all 103.
+ bursts[0].count=103;bursts[0].matched_count=103;await app.refresh();
+ await descendants(strip.children[0]).find(n=>n.textContent==='勾选本页组 · 3 张').onclick();
+ assert.deepEqual([...app.state.selected],[1,2,3]);assert.equal(strip.children.length,13);
+ await validationOptions.view({name:'合成验证组',samples:[{id:1},{id:3}]});
+ assert.equal(app.state.total,2);assert.deepEqual(Array.from(app.state.items,p=>p.id),[1,3]);assert.equal(strip.children.length,2);
+ assert.equal(app.state.selected.size,0);assert(nodes.get('s-filter-status').textContent.includes('合成验证组'));
+ await app.refresh();assert.equal(app.state.total,13,'applying filters returns to ordinary library');
  assert.deepEqual(errors,['synthetic score failure']);
  console.log('PASS: thumbnail navigation, culling marks/scores, 13-photo organizer preview/cancel/explicit confirmation; synthetic metadata only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -36,3 +36,5 @@ PlumiVault is a local-first bird photo indexing and culling application for NAS,
 中国观鸟记录中心名录快照及派生对照表未随仓库分发，默认使用附带的 CC0 历史参考数据；可自行配置合法取得的名录。
 
 项目自身代码的许可尚未选定；公开可见不代表已经授予任意再分发许可。第三方组件和数据各自的许可见 [来源说明](docs/SOURCES.md) 及 [第三方声明](docs/third-party/)。
+
+高清主体预览、自动调整与同裁切原图对照见 [高清预览说明](docs/HD_PREVIEWS.md)。已有照片可手动补生成预览，不需要重新扫描或识别。

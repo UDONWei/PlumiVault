@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null};
+const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null,displayMode:"auto",displayTimer:null,displayAbort:null};
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const btn=(text,fn,cls)=>{const b=el('button',text,cls);b.type='button';b.onclick=(event={})=>Promise.resolve().then(()=>fn(event)).catch(S.options.error);return b;};
 function select(id,title,values){const l=el('label',title),s=el('select');s.id=id;for(const [value,text] of values){const o=el('option',text);o.value=value;s.append(o);}l.append(s);return l;}
@@ -23,7 +23,7 @@ function issueTitle(p){return p.quality?(p.quality.needs_review?(p.quality.issue
 function pictureSummary(){const p=current();if(p)$('s-caption').textContent=birdTitle(p)+' · '+issueTitle(p)+'\n'+p.relative_path+' · '+(p.date||'日期未知')+' · '+(p.context?.location||'地点未设置');}
 const current=()=>S.items[S.at];
 const selected=()=>S.items.filter(p=>S.selected.has(p.id));
-function release(){S.seq++;if(S.blob)URL.revokeObjectURL(S.blob);S.blob=null;}
+function release(){clearTimeout(S.displayTimer);S.displayAbort?.abort();S.displayAbort=null;S.seq++;if(S.blob)URL.revokeObjectURL(S.blob);S.blob=null;}
 function hide(){document.body.classList.remove('studio-focus');S.enabled=false;release();$('studio').hidden=true;$('gallery').hidden=false;$('pagination').hidden=false;$('review-bar').hidden=false;}
 async function show(){S.enabled=true;$('quick').hidden=true;if(window.BirdIndexApp)window.BirdIndexApp.state.quick.active=false;await refresh();}
 function init(options){
@@ -37,9 +37,12 @@ function init(options){
  window.BirdSearch.bind($('s-bird-filter'),birdLabel,options.birds,l=>{S.bird=l.id;S.offset=0;refresh().catch(S.options.error);},()=>{S.bird='';S.offset=0;refresh().catch(S.options.error);});
  const controls=el('div',undefined,'studio-filters');controls.append(select('s-flag','标记',[['','所有标记'],['keep','保留'],['reject','待剔除'],['none','未标记']]),select('s-rating','星级至少',[['','不限'],...[1,2,3,4,5].map(x=>[x,'★'.repeat(x)])]),field('s-min','参考分最低','number'),field('s-max','参考分最高','number'),select('s-quality','质量提示',[['','全部'],['issues','有待复核问题'],['unscored','尚未评分']]),select('s-sort','排序',[['','拍摄索引顺序'],['score','参考分从高到低']]),select('s-storage','原片位置',[['','原目录'],['quarantined','待删除 · 可恢复']]),select('s-visibility','显示范围',[['visible','未隐藏'],['hidden','仅隐藏'],['all','全部（含隐藏）']]));
  controls.append(btn('应用筛选',()=>{S.offset=0;return refresh();}),btn('清除初筛条件',()=>{for(const id of ['s-flag','s-rating','s-min','s-max','s-quality','s-sort','s-storage'])$(id).value='';$('s-visibility').value='visible';S.offset=0;return refresh();}));const filterDetails=el('details',undefined,'studio-filter-details');filterDetails.append(el('summary','筛选：标记、星级、参考分、隐藏与原片位置'),controls);root.append(filterDetails);
- const tools=el('div',undefined,'studio-tools'),all=el('input');all.type='checkbox';all.id='s-select-page';all.onchange=()=>{S.selected=all.checked?new Set(visiblePhotos().map(p=>p.id)):new Set();strip();};const allLabel=el('label');allLabel.append(all,el('span','全选显示的小图'));tools.append(allLabel,btn('勾选图标记保留',()=>markMany('keep')),btn('勾选图标记待剔除',()=>markMany('reject')),btn('勾选图清除标记',()=>markMany('none')),select('s-batch-rating','批量星级',Array.from({length:6},(_,i)=>[String(i),i?i+' 星':'无星'])),btn('应用星级',()=>rateMany()),btn('隐藏勾选图',()=>visibilityMany(true)),btn('恢复显示勾选图',()=>visibilityMany(false)),btn('仅评分勾选图',scoreMany),btn('批量移至待删除',()=>plan('move'),'danger'),btn('恢复勾选原片',()=>plan('restore')));const report=el('a','下载最近任务验证报告','button');report.href='/api/acceptance';tools.append(report,el('span','', 'studio-count'));root.append(tools);
+ const tools=el('div',undefined,'studio-tools'),all=el('input');all.type='checkbox';all.id='s-select-page';all.onchange=()=>{S.selected=all.checked?new Set(visiblePhotos().map(p=>p.id)):new Set();strip();};const allLabel=el('label');allLabel.append(all,el('span','全选显示的小图'));tools.append(allLabel,btn('勾选图标记保留',()=>markMany('keep')),btn('勾选图标记待剔除',()=>markMany('reject')),btn('勾选图清除标记',()=>markMany('none')),select('s-batch-rating','批量星级',Array.from({length:6},(_,i)=>[String(i),i?i+' 星':'无星'])),btn('应用星级',()=>rateMany()),btn('隐藏勾选图',()=>visibilityMany(true)),btn('恢复显示勾选图',()=>visibilityMany(false)),btn('补生成勾选图高清预览',()=>generateDisplay(true)),btn('仅评分勾选图',scoreMany),btn('批量移至待删除',()=>plan('move'),'danger'),btn('恢复勾选原片',()=>plan('restore')));const report=el('a','下载最近任务验证报告','button');report.href='/api/acceptance';tools.append(report,el('span','', 'studio-count'));root.append(tools);
  window.BirdValidation?.init({container:root,api:options.api,error:options.error,message:options.message,selected,repaint:()=>{side();strip();},view:validationView});
- const layout=el('div',undefined,'studio-layout'),stage=el('div',undefined,'studio-stage'),nav=el('div',undefined,'studio-nav');nav.append(btn('← 上一张',()=>move(-1)),el('strong',''),btn('下一张 →',()=>move(1)),btn('加载原图预览',original),btn('缩放 / 框选 / 调整',editor));nav.children[1].id='s-progress';stage.append(nav);
+ const layout=el('div',undefined,'studio-layout'),stage=el('div',undefined,'studio-stage'),nav=el('div',undefined,'studio-nav');nav.append(btn('← 上一张',()=>move(-1)),el('strong',''),btn('下一张 →',()=>move(1)),btn('整张原图',original),btn('缩放 / 框选 / 调整',editor));nav.children[1].id='s-progress';
+ const toggle=btn('原图',()=>{if(S.busy)return;S.displayMode=S.displayMode==='auto'?'raw':'auto';return loadDisplay();});toggle.id='s-display-mode';toggle.title='同一主体裁切：未调整 / 自动调整';
+ const generate=btn('生成此图高清预览',()=>generateDisplay(false));generate.id='s-display-generate';generate.hidden=true;
+ const label=el('small','');label.id='s-display-label';label.setAttribute('role','status');nav.append(toggle,generate);stage.append(nav,label);
  const image=el('img');image.id='s-image';image.alt='当前照片（仅在你的浏览器显示）';stage.append(image);const caption=el('div');caption.id='s-caption';stage.append(caption);
  const right=el('aside',undefined,'studio-side');right.id='s-side';const shell=el('section',undefined,'studio-side-shell');shell.id='s-side-shell';shell.setAttribute('aria-label','照片初筛 · 标记与鸟种');shell.append(right);layout.append(stage,shell);root.append(layout);
  const film=el('div',undefined,'filmstrip');film.id='s-strip';film.setAttribute('aria-label','照片缩略图栏');film.addEventListener('wheel',e=>window.StudioStrip.wheel(e,film),{passive:false});root.append(film);
@@ -98,6 +101,11 @@ function count(){const ids=visiblePhotos().map(p=>p.id),all=$('s-select-page'),n
 function display(){
  release();const p=current(),img=$('s-image');img.removeAttribute('src');$('s-side').replaceChildren();$('s-caption').textContent='';$('s-progress').textContent=p?(S.offset+S.at+1)+' / '+S.total:'没有匹配照片';if(!p)return;
  if(p.thumbnail)img.src=p.thumbnail;pictureSummary();side();
+ $('s-display-label').textContent='缩略图';$('s-display-generate').hidden=true;
+ $('s-display-mode').textContent=S.displayMode==='auto'?'原图':'自动调整';
+ if(window.BirdDisplayPreview&&p.sha256&&p.source_status==='available'){
+  const seq=S.seq;S.displayTimer=setTimeout(()=>{if(seq===S.seq&&S.enabled)loadDisplay().catch(S.options.error);},160);
+ }
 }
 function side(){
  const p=current();if(!p)return;const right=$('s-side');right.replaceChildren();const sel=p.selection||{flag:'none',rating:0,revision:0};
@@ -129,9 +137,31 @@ async function setVisibility(photos,hidden){
  }finally{S.busy=false;}
 }
 function move(delta){if(S.busy)return;const visible=visiblePhotos(),at=visible.findIndex(p=>p.id===current()?.id),p=visible[Math.max(0,Math.min(visible.length-1,at+delta))];if(!p)return;S.at=S.items.findIndex(item=>item.id===p.id);display();strip(true);}
+async function loadDisplay(){
+ const p=current();if(!p||!window.BirdDisplayPreview)return;
+ clearTimeout(S.displayTimer);S.displayAbort?.abort();const abort=new AbortController();S.displayAbort=abort;const seq=++S.seq,mode=S.displayMode;
+ $('s-display-mode').textContent=mode==='auto'?'原图':'自动调整';$('s-display-label').textContent='正在加载'+(mode==='auto'?'自动调整':'未调整')+'主体预览…';
+ const deadline=setTimeout(()=>abort.abort(),30000);
+ try{
+  const result=await window.BirdDisplayPreview.load(p,S.options,mode,abort.signal);if(seq!==S.seq||!S.enabled)return;
+  $('s-display-generate').hidden=!!result;
+  if(!result){if(S.blob)URL.revokeObjectURL(S.blob);S.blob=null;if(p.thumbnail)$('s-image').src=p.thumbnail;else $('s-image').removeAttribute('src');$('s-display-label').textContent='当前为旧缩略图；点“生成此图高清预览”可补充，无需重新识别。';return;}
+  if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(result.blob);$('s-image').src=S.blob;
+  $('s-display-label').textContent=mode==='auto'?'高清主体 · 自动调整（仅显示；判断虚焦请切换原图）':'高清主体 · 原图（同裁切、未调整；RAW 解码预览）';
+ }catch(e){if(seq!==S.seq||!S.enabled)return;$('s-display-label').textContent=e.name==='AbortError'?'高清加载超时，可点击切换按钮重试':'高清暂不可用：'+e.message;$('s-display-generate').hidden=false;}
+ finally{clearTimeout(deadline);}
+}
+async function generateDisplay(many){
+ if(S.busy)return;const photos=many?selected():[current()].filter(Boolean);if(!photos.length)throw Error('请勾选现有照片');
+ S.busy=true;const progress=window.BirdProgress?.begin('生成高清主体预览',photos.length);let failure=null;
+ try{
+  for(const [i,p] of photos.entries()){progress?.update({done:i,path:p.relative_path});S.options.message('生成高清预览 '+(i+1)+' / '+photos.length+'；只读取已选原片，不重新识别或评分。');await window.BirdDisplayPreview.generate(p,S.options);progress?.update({done:i+1});}
+  await loadDisplay();S.options.message('高清预览已缓存；切换“原图”可对照同一主体的未调整画面。');
+ }catch(e){failure=e;throw e;}finally{S.busy=false;progress?.finish(failure);}
+}
 async function original(){
- const p=current();if(!p||S.busy)return;const seq=++S.seq,progress=window.BirdProgress?.begin('加载原图预览',1,p.relative_path);let failure=null;try{S.options.message('正在加载适屏预览…');const preview=await window.BirdPreview.load(p,S.options);const blob=preview.blob;if(seq!==S.seq||!S.enabled)return;
- if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(blob);$('s-image').src=S.blob;S.options.message(preview.cached?'已复用内存中的整图预览，无需重新解码或传图。':'已加载整图预览；最近 3 张在本页内存短暂缓存，不预读下一张。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);}
+ const p=current();if(!p||S.busy)return;release();const seq=S.seq,progress=window.BirdProgress?.begin('加载原图预览',1,p.relative_path);let failure=null;try{S.options.message('正在加载适屏预览…');const preview=await window.BirdPreview.load(p,S.options);const blob=preview.blob;if(seq!==S.seq||!S.enabled)return;
+ if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(blob);$('s-image').src=S.blob;$('s-display-label').textContent='整张原图 · 未调整；点切换按钮返回主体裁切';S.options.message(preview.cached?'已复用内存中的整图预览，无需重新解码或传图。':'已加载整图预览；最近 3 张在本页内存短暂缓存，不预读下一张。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);}
 }
 async function editor(){const p=current();if(!p)return;await window.BirdEditor.open(p.id,{api:S.options.api,token:S.options.token,name:S.options.name,birds:S.options.birds,onChanged:async id=>{const fresh=await S.options.api('/api/photos?ids='+id),i=S.items.findIndex(p=>p.id===id);if(i>=0)S.items[i]=fresh.items[0];display();strip();}});}
 async function scoreMany(){

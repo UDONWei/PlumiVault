@@ -46,7 +46,7 @@ def load_config(path):
   if PROJECT.is_relative_to(Path(root['path'])) or Path(root['path']).is_relative_to(PROJECT):raise ValueError('程序目录与照片目录不能嵌套')
  for i,r in enumerate(cfg['roots']):
   for other in cfg['roots'][i+1:]:disjoint(r['path'],other['path'])
- for key,default,low,high in [('threads',2,1,8),('thumbnail_edge',512,64,512),('thumbnail_budget_mb',1024,1,4096),('max_files_per_job',500,0,9223372036854775807),('stable_seconds',60,0,3600)]:
+ for key,default,low,high in [('threads',2,1,8),('thumbnail_edge',512,64,512),('thumbnail_budget_mb',1024,1,4096),('display_preview_budget_mb',512,8,4096),('max_files_per_job',500,0,9223372036854775807),('stable_seconds',60,0,3600)]:
   value=cfg.setdefault(key,default)
   if type(value)!=int or not low<=value<=high:raise ValueError('配置数值无效：'+key)
  signature=[digest(Path(cfg['model_dir'])/'model.json'),digest(cfg['labels_path']),digest(cfg['detector_config']),str(cfg['thumbnail_edge'])]

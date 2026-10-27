@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
   try:
    parsed=urllib.parse.urlsplit(self.path);path=urllib.parse.unquote(parsed.path);q={k:v[-1] for k,v in urllib.parse.parse_qs(parsed.query).items()};lib=self.server.lib
    if path=='/':return self.send(200,(PROJECT/'web/index.html').read_bytes(),'text/html; charset=utf-8')
-   if path in ('/app.js','/app.css','/editor.js','/preview-cache.js','/editor-math.js','/search.js','/studio.js','/studio-strip.js','/validation.js','/studio.css','/progress.js'):
+   if path in ('/app.js','/app.css','/editor.js','/preview-cache.js','/display-preview.js','/editor-math.js','/search.js','/studio.js','/studio-strip.js','/validation.js','/studio.css','/progress.js'):
     return self.send(200,(PROJECT/'web'/path[1:]).read_bytes(),'text/javascript; charset=utf-8' if path.endswith('.js') else 'text/css; charset=utf-8')
    if path.startswith('/thumbs/'):
     name=path.removeprefix('/thumbs/')
@@ -68,6 +68,13 @@ class Handler(BaseHTTPRequestHandler):
    if path=='/api/folder-context':
     root=lib.root(q['root']);scope=q.get('scope','');folders.directory(root['path'],scope);return self.send(200,{'context':lib.effective_context(q['root'],scope+'/__context__' if scope else '__context__')})
    if path=='/api/locations':return self.send(200,locations(lib))
+   if path in ('/api/display-preview','/api/display-image'):
+    from . import display_preview
+    args=(lib,int(q['id']),q['sha'],int(q['revision']))
+    if path=='/api/display-preview':return self.send(200,display_preview.status(*args))
+    pixels=display_preview.read(*args,q['key'],q['mode'])
+    if pixels is None:return self.send(404,{'error':'高清缓存尚未生成或已淘汰，请补生成'})
+    return self.send(200,pixels,'image/jpeg')
    if path=='/api/preview-version':return self.send(200,lib.preview_version(int(q['id'])))
    if path=='/api/editor':return self.send(200,lib.editor(int(q['id'])))
    if path=='/api/library':return self.send(200,lib.listing(q))
@@ -120,6 +127,9 @@ class Handler(BaseHTTPRequestHandler):
     try:result=call('plan' if path.endswith('-plan') else 'commit',value)
     finally:lib.image_lock.release()
    elif path=='/api/undo':result=lib.db.undo(int(value['change_id']))
+   elif path=='/api/display-preview':
+    from .display_preview import generate
+    result=generate(lib,value['photo_id'],value['source_sha'],value['revision'])
    elif path=='/api/original':
     metadata,pixels=render_original(lib,value['photo_id'],value.get('resolution','screen'),value['source_sha'])
     return self.send(200,pixels,'image/jpeg',headers={'X-Source-Width':str(metadata['source_size'][0]),'X-Source-Height':str(metadata['source_size'][1]),'X-Source-SHA256':metadata['sha256']})

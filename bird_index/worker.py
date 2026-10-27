@@ -24,7 +24,7 @@ def main():
   with MemoryMeter() as meter:
    protocol.write(encode({'ready':True,'initialization_s':initialization})+'\n');protocol.flush()
    for line in sys.stdin:
-    image=view=model_view=None;row={'decode_ok':False,'status':'error','views':[],'timings':{}};start=time.perf_counter();cpu_start=time.process_time();meter.reset_section();path=before=None
+    image=view=model_view=pristine=display_view=None;row={'decode_ok':False,'status':'error','views':[],'timings':{}};start=time.perf_counter();cpu_start=time.process_time();meter.reset_section();path=before=None
     try:
      req=json.loads(line);root=roots[req['root_id']];rel=relative(req['relative_path'])
      if root.get('allow_paths') is not None and rel not in root['allow_paths']:raise ValueError('照片超出配置清单')
@@ -43,7 +43,7 @@ def main():
      row['adjustments']={**settings,'source_sha':before['sha256'],'stale_recipe_ignored':stale,'frame':'decoded_full_v1'}
      timing=time.perf_counter()
      if any(settings[k]!=0 for k in TONE_KEYS):
-      toned=apply_tone(image,settings);image.close();image=toned
+      toned=apply_tone(image,settings);pristine=image;image=toned
      row['timings']['tone_s']=time.perf_counter()-timing
      timing=time.perf_counter()
      row['capture_context']=resolve_context(req['context'],{},row.get('exif',{}),root.get('name',Path(root['path']).name),rel,occurrences['regions']);row['similarity']={'whole':describe(image)};row['timings']['similarity_whole_s']=time.perf_counter()-timing
@@ -53,6 +53,15 @@ def main():
      except Exception as exc:row['detection']={'status':'error','selected_box':None,'message':'主体检测失败，保留整图待复核','error':str(exc)}
      row['timings']['detection_s']=time.perf_counter()-timing
      box=row['detection'].get('selected_box');view=image;entry={'name':'subject' if box else 'whole','source':'manual_box' if settings['box'] else 'automatic_bird_detection' if box else 'whole'}
+     # Use untone pixels for both display variants; never change recognition/quality inputs.
+     timing=time.perf_counter()
+     try:
+      from .display_preview import subject
+      display_view=subject(pristine if pristine is not None else image,box)
+     except Exception as exc:entry['display_preview_error']=str(exc)
+     finally:
+      if pristine is not None:pristine.close();pristine=None
+      row['timings']['display_prepare_s']=time.perf_counter()-timing
      if box:view,entry['pixel_box']=crop_box(image,box);entry['normalized_box']=box
      from .quality import assess
      timing=time.perf_counter();row['quality']=assess(image,box);row['timings']['quality_s']=time.perf_counter()-timing;row['quality'].update(source_sha=before['sha256'],recipe=settings,input='当前解码与调整画面')
@@ -60,6 +69,13 @@ def main():
      entry.update(rank_scores(model.labels,scores,row['capture_context'],occurrences,5));entry['all_visual_scores']=scores
      timing=time.perf_counter();after=fingerprint(path,True);row['timings']['source_hash_after_s']=time.perf_counter()-timing;row.update(after=after,source_unchanged=before==after)
      if before!=after:raise ValueError('处理期间源文件变化，结果未采用')
+     if display_view is not None:
+      timing=time.perf_counter()
+      try:
+       from .display_preview import store
+       entry['display_preview']=store(cfg,before['sha256'],box,display_view)
+      except Exception as exc:entry['display_preview_error']=str(exc)
+      finally:display_view.close();display_view=None;row['timings']['display_cache_s']=time.perf_counter()-timing
      name=hashlib.sha256((req['root_id']+'\0'+rel+'\0'+before['sha256']+'\0'+cfg['pipeline_version']+'\0'+encode(settings)).encode()).hexdigest()+'.jpg';target=thumbdir/name;temporary=thumbdir/(name+'.tmp')
      timing=time.perf_counter();thumb=view  # All full-resolution work is finished; resize the owned view without another full-size copy.
      try:
@@ -70,6 +86,8 @@ def main():
      row['views']=[entry];row['status']='needs_review'
     except Exception as exc:row['error']=f'{type(exc).__name__}: {exc}'
     finally:
+     if pristine is not None:pristine.close()
+     if display_view is not None:display_view.close()
      if model_view is not None and model_view is not view:model_view.close()
      if view is not None and view is not image:view.close()
      if image is not None:image.close()

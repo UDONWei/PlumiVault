@@ -6,7 +6,7 @@ function node(tag,text,className){const n=document.createElement(tag);if(text!==
 function button(text,fn,cls){const b=node('button',text,cls);b.type='button';b.addEventListener('click',()=>Promise.resolve(fn()).catch(error));return b;}
 function message(text,bad=false){$('notice').textContent=text;$('notice').className=bad?'error':'';}
 function error(err){message(err.message||String(err),true);}
-async function request(path,body){const options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Bird-Token':state.token},body:JSON.stringify(body)};const response=await fetch(path,options);const data=await response.json();if(!response.ok)throw Error(data.error||'请求失败');return data;}
+async function request(path,body,signal){const options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Bird-Token':state.token},body:JSON.stringify(body)};if(signal)options.signal=signal;const response=await fetch(path,options);const data=await response.json();if(!response.ok)throw Error(data.error||'请求失败');return data;}
 function name(id){return state.labels.get(id)?.name||id||'待复核';}
 function candidates(photo){return photo.candidates.filter(c=>c.label.kind==='bird').slice(0,5).map(c=>c.label.scientific_name);}
 function filters(){return {root:$('folder').value,state:$('state').value||'all',q:$('search').value.trim(),region:$('region').value.trim(),from:$('date-from').value,to:$('date-to').value,species:state.species,...(window.BirdStudio?.filters()||{})};}

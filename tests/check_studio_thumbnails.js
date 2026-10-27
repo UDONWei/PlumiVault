@@ -19,6 +19,9 @@ const body=new Element('body');
 for(const id of ['studio','quick','gallery','pagination','review-bar','list-summary','export-csv','folder']){const n=new Element();n.id=id;body.append(n);}
 const photos=Array.from({length:10},(_,i)=>({id:i+1,relative_path:`synthetic/${i+1}.jpg`,date:'2026-01-01',context:{location:'合成测试'},thumbnail:`/synthetic/${i+1}.jpg`,sha256:String(i+1).repeat(64),manual:{status:'confirmed',species:['Bird alpha'],revision:1},candidates:[],selection:{flag:'none',rating:0,revision:0}}));
 const context={window:{BirdProgress:{begin:(title,total)=>{const row={title,total,done:0};progress.push(row);return {update:value=>Object.assign(row,value),finish:error=>{row.error=error?.message||null;}};}},BirdSearch:{bind:()=>{}},BirdEditor:{isOpen:()=>false}},document:{body,getElementById:id=>nodes.get(id),createElement:tag=>new Element(tag),addEventListener:()=>{}},matchMedia:()=>({matches:false}),URL:{revokeObjectURL:()=>{}},URLSearchParams,Promise,console};
+const timers=new Map();let timerId=0;
+Object.assign(context,{AbortController,setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)});
+context.URL.createObjectURL=blob=>'blob:'+blob.tag;
 const api=async(url,value)=>{calls.push({url,value});if(url==='/api/library-folders')return {items:[{root_id:'fixture',root_name:'测试',path:'synthetic',count:photos.length}]};if(url.startsWith('/api/library?')){const scope=new URLSearchParams(url.split('?')[1]).get('visibility')||'visible';const visible=photos.filter(p=>scope==='all'||!!p.visibility?.hidden===(scope==='hidden'));return {items:structuredClone(visible),total:visible.length,matched_photos:visible.length,bursts:bursts.map(g=>({...g,ids:g.ids.filter(id=>visible.some(p=>p.id===id))}))};}if(url==='/api/visibility')return {records:value.items.map(item=>{const p=photos.find(p=>p.id===item.id);p.visibility={photo_id:p.id,hidden:value.hidden,revision:item.revision+1};return p.visibility;})};if(url==='/api/selection')return {records:value.items.map(item=>{const p=photos.find(p=>p.id===item.id);p.selection={photo_id:p.id,flag:value.flag??p.selection.flag,rating:value.rating??p.selection.rating,revision:item.revision+1};return p.selection;})};if(url==='/api/curation-status')return {enabled:true,scope:'indexed_root',max_batch:100,pending:[]};
 if(url.startsWith('/api/photos?ids='))return {items:structuredClone(photos.filter(p=>url.split('=')[1].split(',').map(Number).includes(p.id)))};
 if(url==='/api/curation-plan')return {plan_id:'synthetic-plan',action:value.action,destination_display:'synthetic quarantine',items:value.ids.map(id=>({source:'synthetic/'+id+'.jpg',destination:'synthetic quarantine/'+id+'.jpg'}))};
@@ -97,5 +100,20 @@ vm.createContext(context);vm.runInContext(fs.readFileSync(require('path').join(r
  assert.equal(app.state.selected.size,0);assert(nodes.get('s-filter-status').textContent.includes('合成验证组'));
  await app.refresh();assert.equal(app.state.total,13,'applying filters returns to ordinary library');
  assert.deepEqual(errors,['synthetic score failure']);
+ // A late HD response must never replace a newer photo, and raw/auto use the same photo.
+ let resolveLate,displayCalls=[],generated=[];
+ context.window.BirdDisplayPreview={load:async(p,options,mode,signal)=>{displayCalls.push({id:p.id,mode,signal});return new Promise(resolve=>resolveLate=resolve);},generate:async p=>generated.push(p.id)};
+ const toggle=nodes.get('s-display-mode'),late=toggle.onclick();await Promise.resolve();await Promise.resolve();
+ const pending=displayCalls.at(-1);assert.equal(pending.mode,'raw');
+ await strip.children[1].children[1].onclick();const newer=nodes.get('s-image').src;assert(pending.signal.aborted);
+ resolveLate({blob:{tag:'stale'}});await late;assert.equal(nodes.get('s-image').src,newer);
+ context.window.BirdDisplayPreview.load=async(p,options,mode)=>{displayCalls.push({id:p.id,mode});return {blob:{tag:mode+'-'+p.id}};};
+ await toggle.onclick();assert.equal(nodes.get('s-image').src,'blob:auto-'+app.state.items[app.state.at].id);
+ await toggle.onclick();assert.equal(nodes.get('s-image').src,'blob:raw-'+app.state.items[app.state.at].id);
+ assert(nodes.get('s-display-label').textContent.includes('同裁切、未调整'));
+ app.state.selected=new Set([1,3]);await descendants(body).find(n=>n.textContent==='补生成勾选图高清预览').onclick();
+ assert.deepEqual(generated,[1,3]);assert.equal(app.state.busy,false);assert.equal(progress.at(-1).done,2);
+ context.window.BirdDisplayPreview.load=async()=>null;await toggle.onclick();assert.equal(nodes.get('s-display-generate').hidden,false);
+ assert(nodes.get('s-display-label').textContent.includes('旧缩略图'));assert.deepEqual(errors,['synthetic score failure']);
  console.log('PASS: thumbnail navigation, culling marks/scores, 13-photo organizer preview/cancel/explicit confirmation; synthetic metadata only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

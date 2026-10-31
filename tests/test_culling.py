@@ -84,7 +84,8 @@ class CullingTests(unittest.TestCase):
  def test_score_filters_csv_and_cache_no_original_reads(self):
   from bird_index.quality import score_existing
   from bird_index.common import encode
-  sha=self.f.lib.items()[0]['sha256'];q={'score':68,'source_sha':sha,'needs_review':True,'issues':['合成测试提示']}
+  from bird_index.quality_models import cache_key
+  sha=self.f.lib.items()[0]['sha256'];q={'score':68,'source_sha':sha,'needs_review':True,'issues':['合成测试提示'],'model_key':cache_key(self.f.cfg),'ai':{'status':'unavailable'}}
   with self.f.db.transaction() as c:
    row=json.loads(c.execute('SELECT summary FROM photos WHERE id=1').fetchone()[0]);row['quality']=q;c.execute('UPDATE photos SET summary=? WHERE id=1',(encode(row),))
   self.assertEqual(self.f.lib.listing({'min_score':'70'})['total'],0);self.assertEqual(self.f.lib.listing({'max_score':'70','quality':'issues'})['total'],1)

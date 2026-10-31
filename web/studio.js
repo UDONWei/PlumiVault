@@ -90,6 +90,9 @@ function strip(reveal=false){
   const validationBadge=window.BirdValidation?.badge(p.id);if(validationBadge)card.append(el('span',validationBadge,'film-validation'));
   if(p.visibility?.hidden)card.append(el('span','已隐藏','film-hidden'));
   if(group&&group.count>1){
+   const best=window.StudioStrip.best(S.items,group);
+   if(best.includes(p.id))card.append(el('span','★ 本页组内 AI 备选','film-validation'));
+   if(best.length&&p.id===group.ids[0]&&!S.expanded.has(group.key))card.append(el('small','展开可查看 '+best.length+' 张高分备选'));
    card.append(btn('勾选本页组 · '+group.ids.length+' 张',()=>{if(S.busy)return;S.expanded.add(group.key);S.selected=new Set(group.ids);S.anchor=group.ids[0];strip();S.options.message('已勾选当前页/筛选内 '+group.ids.length+' 张；此连续组共 '+group.count+' 张，其他页或被筛选的照片未加入。');},'film-group'));
    if(group.ids.length>1){const expanded=S.expanded.has(group.key),label=(expanded?'收拢组':'展开组')+' · '+group.ids.length+' 张'+(group.ids.length<group.matched_count?'（当前页 / '+group.matched_count+'）':'');
     card.append(btn(label,()=>{if(S.busy)return;if(expanded){S.expanded.delete(group.key);if(group.ids.includes(current()?.id))S.at=S.items.findIndex(p=>p.id===group.ids[0]);}else S.expanded.add(group.key);
@@ -117,15 +120,38 @@ function side(){
  const marks=el('div',undefined,'studio-buttons');for(const [text,flag] of [['保留 P','keep'],['待剔除 X','reject'],['清除 U','none']])marks.append(btn(text,()=>mark(p,flag,null),flag===sel.flag?'selected':''));right.append(marks);
  const stars=el('div',undefined,'studio-buttons');for(let i=0;i<=5;i++)stars.append(btn(i===0?'无星':i+'★',()=>mark(p,null,i),i===sel.rating?'selected':''));right.append(stars);
  window.BirdValidation?.side(right,p);
- const q=p.quality;right.append(el('h3',q?'技术参考分 '+q.score+' / 100':'尚未评分'));right.append(el('small','鸟眼对焦、遮挡和姿态美观：专门模型评估中，尚未上线；当前分数不包含这些结论。'));
+ const q=p.quality;right.append(el('h3',q?(q.ai?'AI 综合参考分 ':'技术参考分 ')+q.score+' / 100':'尚未评分'));
+ if(q?.ai){
+  right.append(el('small','技术基础分 '+q.technical_score+'；AI 结果未校准，人工判断优先。'));
+  for(const [key,title] of [['eye','鸟眼局部清晰度'],['occlusion','遮挡参考'],['posture','姿态美观参考']]){const part=q.ai[key];right.append(el('p',title+'：'+(part?.label||'无法判断')+(part?.score!=null?' · '+part.score+' 分':'')));}
+  if(q.ai.error)right.append(el('p','AI 状态：'+q.ai.error,'quality-issue'));
+  right.append(el('small','遮挡与姿态使用 BioCLIP 文图匹配，不是专门训练的分类器；鸟眼位置可能误检。'));
+ }else right.append(el('small','这是旧版技术分。请勾选补评分，或在扫描任务中选择重新扫描，生成鸟眼、遮挡与姿态参考。'));
  if(q){right.append(el('small','清晰度 '+(q.clarity??'未知')+' · 曝光 '+q.exposure+' · 构图 '+(q.composition??'未知')));for(const text of q.issues)right.append(el('p',text,'quality-issue'));right.append(el('small',q.limits));}
  else right.append(el('small','勾选后补评分；新处理照片复用解码自动评分。未校准，不依据分数自动删除。'));
+ if(q&&p.quality_key)qualityFeedback(right,p);
  right.append(el('h3','鸟种确认'),el('p',p.manual.species.map(S.options.name).join('、')||({unreviewed:'尚未复核',uncertain:'暂不确定',no_bird:'人工确认无鸟',none_match:'候选都不对'}[p.manual.status]||p.manual.status)));
  for(const c of (p.candidates||[]).filter(c=>c.label.kind==='bird').slice(0,5)){const id=c.label.scientific_name;right.append(btn(S.options.name(id),()=>review(p,'confirmed',[id]),p.manual.species.includes(id)?'selected':''));}
  const search=el('input');search.placeholder='汉字、拼音或首字母搜索鸟种';search.setAttribute('aria-label','鸟种搜索');right.append(search);window.BirdSearch.bind(search,right,S.options.birds,l=>review(p,'confirmed',[l.id]));
  right.append(btn(p.visibility?.hidden?'恢复显示此图':'隐藏此图（不移动）',()=>setVisibility([p],!p.visibility?.hidden)));
  right.append(btn('暂不确定',()=>review(p,'uncertain',[])),btn('无鸟（仅分类，不移动）',()=>review(p,'no_bird',[])),btn('清除鸟种确认',()=>review(p,'unreviewed',[])));
  if(p.source_status==='quarantined')right.append(el('p','原片已暂存。勾选后可恢复；缩略图和人工记录保留。'));
+}
+function qualityFeedback(right,p){
+ const panel=el('details'),record=p.quality_feedback||{revision:0,values:{}},values=record.values||{},inputs={};
+ panel.append(el('summary','纠正本次 AI 判断'+(record.revision?' · 已有记录':'')));
+ if(record.stale)panel.append(el('small','之前的反馈对应旧评分，保留作历史参考；本次请重新核对。'));
+ const options={eye_location:['眼点定位',[['correct','正确'],['wrong','位置错误'],['missed','漏检'],['uncertain','看不清']]],focus:['眼部清晰度',[['clear','清晰'],['defocus','虚焦'],['motion_blur','运动模糊'],['mixed','混合模糊'],['uncertain','无法判断']]],occlusion:['主体遮挡',[['clear','无遮挡'],['partial','部分遮挡'],['heavy','明显遮挡'],['uncertain','无法判断']]],posture:['姿态美观',[['good','喜欢 / 较好'],['ordinary','普通'],['poor','不喜欢 / 欠佳'],['uncertain','无法判断']]]};
+ for(const [key,[title,choices]] of Object.entries(options)){
+  const label=el('label',title),input=el('select');for(const [value,text] of [['unreviewed','尚未核对'],...choices]){const option=el('option',text);option.value=value;input.append(option);}input.value=record.stale?'unreviewed':values[key]||'unreviewed';label.append(input);inputs[key]=input;panel.append(label);
+ }
+ const note=el('input');note.maxLength=500;note.placeholder='备注（可选）';note.value=record.stale?'':values.note||'';panel.append(note);
+ const save=btn('保存这张的纠正',async()=>{if(S.busy)return;S.busy=true;save.disabled=true;
+  try{const values={note:note.value};for(const [key,input] of Object.entries(inputs))values[key]=input.value;
+   p.quality_feedback=await S.options.api('/api/quality-feedback',{photo_id:p.id,source_sha:p.sha256,quality_key:p.quality_key,revision:record.revision,values});
+   if(current()?.id===p.id)side();S.options.message('质量反馈已保存在本地；不改人工标记，不自动训练或上传。');
+  }finally{S.busy=false;save.disabled=false;}
+ });panel.append(save);const download=el('a','导出全部评分反馈');download.href='/api/export/quality-feedback';download.className='button';panel.append(download);right.append(panel);
 }
 async function review(p,status,species){if(S.busy)return;S.busy=true;try{const r=await S.options.api('/api/review',{items:[{id:p.id,revision:p.manual.revision}],status,species});p.manual={...p.manual,...r.records[0],stale:!!(p.sha256&&r.records[0].reviewed_sha!==p.sha256&&status!=='unreviewed')};S.groups=S.groups.filter(g=>!g.ids.includes(p.id));if(current()?.id===p.id){side();pictureSummary();}strip();await S.options.summary();S.options.message('鸟种已保存，图片位置保持。');}finally{S.busy=false;}}
 async function mark(p,flag,rating){if(!p||S.busy)return;S.busy=true;try{await writeMarks([p],flag,rating);side();strip();}finally{S.busy=false;}}
@@ -170,7 +196,7 @@ async function original(){
 async function editor(){const p=current();if(!p)return;await window.BirdEditor.open(p.id,{api:S.options.api,token:S.options.token,name:S.options.name,birds:S.options.birds,onChanged:async id=>{const fresh=await S.options.api('/api/photos?ids='+id),i=S.items.findIndex(p=>p.id===id);if(i>=0)S.items[i]=fresh.items[0];display();strip();}});}
 async function scoreMany(){
  const photos=selected();if(S.busy)return;if(!photos.length)throw Error('请勾选要评分的现有照片，不会扫描新文件');S.busy=true;const progress=window.BirdProgress?.begin('质量评分',photos.length);let failure=null;
- try{for(const [i,p] of photos.entries()){progress?.update({done:i,path:p.relative_path});S.options.message('本地质量评估 '+(i+1)+' / '+photos.length+'；未改变的评分复用结果。');const r=await S.options.api('/api/quality',{photo_id:p.id,source_sha:p.sha256});p.quality=r.quality;progress?.update({done:i+1});side();pictureSummary();strip();}S.options.message('评分完成。请结合原图判断，参考分不会自动移动照片。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);S.busy=false;}
+ try{for(const [i,p] of photos.entries()){progress?.update({done:i,path:p.relative_path});S.options.message('本地质量评估 '+(i+1)+' / '+photos.length+'；未改变的评分复用结果。');const r=await S.options.api('/api/quality',{photo_id:p.id,source_sha:p.sha256});p.quality=r.quality;p.quality_key=r.quality_key;p.quality_feedback=r.quality_feedback;progress?.update({done:i+1});side();pictureSummary();strip();}S.options.message('评分完成。请结合原图判断，参考分不会自动移动照片。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);S.busy=false;}
 }
 async function plan(action){
  if(S.busy)return;const photos=selected();if(!photos.length)throw Error('请先勾选现有照片');const status=await S.options.api('/api/curation-status');

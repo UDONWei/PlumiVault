@@ -35,6 +35,33 @@ class ScanPlanTests(unittest.TestCase):
   self.f.file('picked/a.jpg');b=self.f.file('picked/b.jpg');p=self.preview();b.write_bytes(b'new content')
   with self.assertRaises(Conflict):self.commit(p)
   self.assertEqual(self.f.db.query('SELECT * FROM jobs'),[]);self.assertEqual(self.f.db.query('SELECT * FROM photos'),[])
+ def test_rescan_requires_explicit_preview_and_preserves_user_records(self):
+  from bird_index.selection import set_selection
+  for name in ('picked/a.jpg','picked/b.jpg','outside/c.jpg'):self.f.file(name)
+  self.f.jobs.run_one(self.f.jobs.create('fixture',scopes=['picked','outside'])['id']);p=self.f.lib.items([1])[0]
+  self.f.db.review([{'id':1,'revision':0}],'confirmed',['Bird beta'])
+  set_selection(self.f.db,[{'id':1,'revision':0}],'keep',5)
+  edit=self.f.lib.save_adjustment(1,p['sha256'],0,{'box':[.2,.2,.8,.8],'shadows':30})
+  before=self.f.lib.export_reviews()['photos'];self.assertEqual(self.preview()['items'],[])
+  plan=self.preview(rescan=True);self.assertEqual(plan['counts']['rescan'],2);self.assertEqual(plan['counts']['unchanged'],0)
+  self.assertTrue(all(x['reason']=='rescan' and x['photo_id'] for x in plan['items']))
+  job=self.commit(plan,['picked/a.jpg']);requests=[];run=self.f.processor.run
+  def record(request):requests.append(request);return run(request)
+  self.f.processor.run=record;self.f.jobs.run_one(job)
+  self.assertEqual(len(requests),1);self.assertEqual(requests[0]['adjustment']['recipe'],edit['recipe'])
+  self.assertEqual(self.f.processor.calls.count('picked/a.jpg'),2);self.assertEqual(self.f.processor.calls.count('picked/b.jpg'),1);self.assertEqual(self.f.processor.calls.count('outside/c.jpg'),1)
+  self.assertEqual(self.f.lib.export_reviews()['photos'],before);current=self.f.lib.items([1])[0]
+  self.assertEqual(current['selection']['rating'],5);self.assertEqual(current['selection']['flag'],'keep')
+  self.assertEqual(self.f.lib.adjustment(1)['recipe'],edit['recipe']);self.assertEqual(self.preview()['items'],[])
+ def test_rescan_does_not_expand_authorization_or_bypass_conflicts(self):
+  a=self.f.file('picked/a.jpg');self.f.file('picked/b.jpg');self.f.jobs.run_one(self.f.jobs.create('fixture',scopes=['picked'])['id'])
+  with self.f.db.transaction() as c:c.execute('UPDATE roots SET allow_paths=?',(json.dumps(['picked/a.jpg']),))
+  plan=self.preview(rescan=True,limit=1);self.assertEqual([x['path'] for x in plan['items']],['picked/a.jpg'])
+  with self.assertRaises(ValueError):self.commit(plan,['picked/b.jpg'])
+  a.write_bytes(b'changed after preview')
+  with self.assertRaises(Conflict):self.commit(plan)
+  for value in ('false',1,None):
+   with self.assertRaises(ValueError):self.preview(rescan=value)
  def test_changed_while_queued_is_not_processed_and_pauses(self):
   a=self.f.file('picked/a.jpg');job=self.commit(self.preview());a.write_bytes(b'new data')
   self.f.jobs.run_one(job);self.assertEqual(self.f.processor.calls,[]);self.assertEqual(self.f.jobs.state(job),'paused')

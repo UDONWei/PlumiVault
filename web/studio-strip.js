@@ -17,5 +17,14 @@
   const next=Math.max(0,Math.min(max,element.scrollLeft+amount));
   if(next!==element.scrollLeft){e.preventDefault();element.scrollLeft=next;}
  }
- window.StudioStrip={choose,visible,wheel};
+ function best(items,group){
+  const members=items.filter(p=>group.ids.includes(p.id)),valid=members.filter(p=>p.quality?.ai?.status==='reference'&&Number.isFinite(p.quality.score));
+  // Compare the same available dimensions and model revision only. A partial
+  // page/filter is deliberately labelled as such by the caller.
+  if(valid.length<2)return [];
+  const signature=p=>JSON.stringify([p.quality.model_key,(p.quality.score_components||[]).map(x=>x.name)]);
+  if(valid.length!==members.length||new Set(valid.map(signature)).size!==1)return [];
+  return valid.slice().sort((a,b)=>b.quality.score-a.quality.score||a.id-b.id).slice(0,Math.min(2,Math.max(1,Math.ceil(valid.length/4)))).map(p=>p.id);
+ }
+ window.StudioStrip={choose,visible,wheel,best};
 })();

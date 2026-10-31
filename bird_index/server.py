@@ -62,6 +62,9 @@ class Handler(BaseHTTPRequestHandler):
    if path=='/api/export/validation':
     from .validation import export
     return self.send(200,export(lib),download='plumivault-quality-validation.json')
+   if path=='/api/export/quality-feedback':
+    from .quality_feedback import export
+    return self.send(200,export(lib),download='plumivault-quality-feedback.json')
    if path=='/api/labels':return self.send(200,{'items':list(lib.labels().values())})
    if path=='/api/folders':return self.send(200,folders.listing(lib,q['root'],q.get('parent',''),q.get('offset',0),q.get('sort','date_desc')))
    if path=='/api/library-folders':return self.send(200,{'items':folders.catalog(lib)})
@@ -137,7 +140,10 @@ class Handler(BaseHTTPRequestHandler):
    elif path=='/api/reprocess':result=self.server.jobs.reprocess(value['photo_id'],value['source_sha'],value['revision'])
    elif path=='/api/view':result=lib.preferences(value)
    elif path=='/api/context':result=lib.context(value['root_id'],value['context'],value.get('scope',''))
-   elif path=='/api/scan-preview':result=self.server.scan_plans.preview(value['root_id'],value['scopes'],value.get('limit'))
+   elif path=='/api/quality-feedback':
+    from .quality_feedback import save
+    result=save(lib,value)
+   elif path=='/api/scan-preview':result=self.server.scan_plans.preview(value['root_id'],value['scopes'],value.get('limit'),value.get('rescan',False))
    elif path=='/api/scan-confirm':result=self.server.scan_plans.commit(value['preview_token'],value['paths'])
    elif path=='/api/jobs':
     if lib.cfg.get('require_folder_selection'):raise ValueError('请先检查目录变更，再确认处理清单')

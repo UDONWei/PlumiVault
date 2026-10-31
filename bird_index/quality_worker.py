@@ -1,4 +1,4 @@
-"""One-shot quality evaluation; no model loaded, original pixels stay in memory."""
+"""One-shot offline CPU quality models; process exit releases model memory."""
 import argparse,contextlib,json,os,subprocess,sys,time
 from pathlib import Path
 from .common import PROJECT,load_config,encode,safe_file
@@ -12,7 +12,7 @@ def run(cfg,request):
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--config',required=True);cfg=load_config(p.parse_args().config);req=json.load(sys.stdin);protocol=sys.stdout
- from stage1_probe import install_guard,fingerprint,decode,MemoryMeter
+ from stage1_probe import install_guard,fingerprint,decode,MemoryMeter,LocalBioCLIP
  install_guard(Path(cfg['data_dir']));start=time.perf_counter();image=None
  with contextlib.redirect_stdout(sys.stderr),MemoryMeter() as meter:
   try:
@@ -22,7 +22,14 @@ def main():
    if before['sha256']!=req['expected_sha']:raise ValueError('原片指纹变化')
    row={'path':req['display_path'],'source_path':req['relative_path'],'before':before,'timings':{}};image=decode(path,'full',1600,row,row['timings']);settings=recipe(req['adjustment']['recipe']);toned=apply_tone(image,settings);image.close();image=toned
    from .quality import assess
-   row['quality']=assess(image,settings['box'] or req.get('detected_box'));row['quality'].update(source_sha=before['sha256'],recipe=settings,input='完整解码与当前调整画面')
+   from .quality_models import QualityModels,manifest_path
+   model=None
+   if manifest_path(cfg).is_file():
+    import torch
+    torch.set_num_threads(cfg['threads']);torch.set_num_interop_threads(1)
+    model=LocalBioCLIP(cfg['model_dir'],Path(cfg['labels_path']),Path(cfg['text_features']) if cfg.get('text_features') else None)
+   models=QualityModels(cfg,model)
+   row['quality']=assess(image,settings['box'] or req.get('detected_box'),models);row['quality'].update(source_sha=before['sha256'],recipe=settings,input='完整解码与当前调整画面；不使用自动增强/降噪预览评分')
    after=fingerprint(path,True)
    if before!=after:raise ValueError('评分期间原片变化')
    meter.sample();row.update(after=after,decode_ok=True,source_unchanged=True,adjustments=settings,memory=meter.report());row['timings']['total_s']=time.perf_counter()-start

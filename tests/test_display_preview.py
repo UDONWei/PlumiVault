@@ -144,7 +144,7 @@ class DisplayPreviewTests(unittest.TestCase):
             for obj,name,value in [(stage1_probe,'install_guard',lambda *_:None),(stage1_probe,'LocalBioCLIP',Model),(subject_detector,'LocalBirdDetector',Detector),
                 (context_prior,'load_occurrences',lambda *_:{'regions':[]}),(context_prior,'resolve_context',lambda *_:{}),(context_prior,'rank_scores',lambda *_:{}),
                 (similarity_features,'describe',lambda *_:{}),(torch,'set_num_threads',lambda *_:None),(torch,'set_num_interop_threads',lambda *_:None),
-                (quality,'assess',lambda image,box:seen.append(image.getpixel((0,0))) or {})]:stack.enter_context(patch.object(obj,name,value))
+                (quality,'assess',lambda image,box,models=None:seen.append(image.getpixel((0,0))) or {})]:stack.enter_context(patch.object(obj,name,value))
             decoded=stack.enter_context(patch.object(stage1_probe,'decode',side_effect=lambda *_:source.copy()))
             stack.enter_context(patch.object(sys,'argv',['worker','--config',str(self.f.config)]));stack.enter_context(patch.object(sys,'stdin',io.StringIO(encode(req)+'\n')));stack.enter_context(patch.object(sys,'stdout',output))
             worker.main()

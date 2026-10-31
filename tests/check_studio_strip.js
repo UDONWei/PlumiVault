@@ -18,3 +18,7 @@ wheel({...event,deltaX:90},strip);assert.equal(strip.scrollLeft,150);
 wheel({...event,deltaY:-2,deltaMode:1},strip);assert.equal(strip.scrollLeft,114);
 strip.scrollLeft=1000;wheel(event,strip);assert.equal(prevented,2,'boundary allows page scrolling');
 console.log('PASS: plain/Ctrl/Shift selection, folded scope, horizontal wheel and boundary/zoom behavior');
+
+const q=(id,score)=>({id,quality:{score,model_key:'same',ai:{status:'reference'},score_components:[{name:'technical'},{name:'eye'}]}});
+const ranked=[q(1,30),q(2,90),q(3,70),q(4,80)],g={ids:[1,2,3,4]};assert.deepEqual(Array.from(ctx.window.StudioStrip.best(ranked,g)),[2]);
+ranked[0].quality.model_key='old';assert.equal(ctx.window.StudioStrip.best(ranked,g).length,0);

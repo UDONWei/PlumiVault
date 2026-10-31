@@ -42,7 +42,9 @@ class ScanPlans:
         if connection.execute("SELECT 1 FROM file_plans WHERE state='executing' LIMIT 1").fetchone():
             raise Conflict('原片整理尚未完成')
 
-    def preview(self, root_id, scopes, limit=None):
+    def preview(self, root_id, scopes, limit=None, rescan=False):
+        if type(rescan) is not bool:
+            raise ValueError('重新扫描选项必须为布尔值')
         root = self.lib.root(root_id)
         scopes = folders.validate(root['path'], scopes)
         cap = self.jobs.cfg['max_files_per_job']
@@ -77,7 +79,7 @@ class ScanPlans:
         known = {p['rel_path']: p for p in self.db.query('SELECT * FROM photos WHERE root_id=?', (root_id,))}
         items = []
         seen = set()
-        counts = dict(new=0, updated=0, retry=0, unchanged=0, unavailable=0)
+        counts = dict(new=0, updated=0, retry=0, unchanged=0, rescan=0, unavailable=0)
         for rel in paths:
             if rel in seen:
                 continue
@@ -99,7 +101,7 @@ class ScanPlans:
             elif old['inference_status'] != 'ready':
                 reason = 'retry'
             else:
-                reason = 'unchanged'
+                reason = 'rescan' if rescan else 'unchanged'
             counts[reason] += 1
             if reason != 'unchanged':
                 items.append({'path': rel, 'photo_id': old['id'] if old else None, 'reason': reason,
@@ -107,16 +109,16 @@ class ScanPlans:
         missing = [{'photo_id': p['id'], 'path': rel} for rel, p in known.items()
                    if folders.includes(rel, scopes) and rel not in seen and p['source_status'] != 'quarantined']
         token = secrets.token_urlsafe(24)
-        plan = dict(root_id=root_id, scopes=scopes, limit=limit, items=items, created=time.monotonic())
+        plan = dict(root_id=root_id, scopes=scopes, limit=limit, rescan=rescan, items=items, created=time.monotonic())
         with self.lock:
             self.pending = {k: v for k, v in self.pending.items() if time.monotonic()-v['created'] < 1800}
             while len(self.pending) >= 4:
                 del self.pending[next(iter(self.pending))]
             self.pending[token] = plan
-        return {'preview_token': token, 'root_id': root_id, 'scopes': scopes, 'limit': limit,
+        return {'preview_token': token, 'root_id': root_id, 'scopes': scopes, 'limit': limit, 'rescan': rescan,
                 'items': [{k: v for k, v in item.items() if not k.startswith('_')} for item in items],
                 'counts': counts, 'missing': missing, 'errors': errors,
-                'notice': '只检查路径、大小和修改时间，未读取照片内容或启动识别。未变化照片跳过；清单 30 分钟有效，服务重启后需重新检查。'}
+                'notice': '只检查路径、大小和修改时间，未读取照片内容或启动识别。'+('已包含未变化照片，确认后重新解码、识别、评分并更新预览；保留人工鸟种、标记、星级和有效裁切。' if rescan else '未变化照片跳过。')+'清单 30 分钟有效，服务重启后需重新检查。'}
 
     def commit(self, token, paths):
         with self.lock:
@@ -143,7 +145,7 @@ class ScanPlans:
                     if (stat.st_size, stat.st_mtime_ns) != (item['size'], item['mtime_ns']) or signature(old) != item['_record']:
                         raise Conflict('清单之后文件或索引变化，请重新检查目录：' + rel)
                 c.execute('INSERT INTO jobs(id,root_id,scope,limit_count,state,force,created_at,updated_at,scopes,discovery_done,found) VALUES(?,?,?,?,?,?,?,?,?,1,?)',
-                          (identifier, root['id'], '', plan['limit'], 'queued', 0, now(), now(), encode(plan['scopes']), len(paths)))
+                          (identifier, root['id'], '', plan['limit'], 'queued', int(plan['rescan']), now(), now(), encode(plan['scopes']), len(paths)))
                 for rel in paths:
                     item = indexed[rel]
                     pid = item['photo_id']

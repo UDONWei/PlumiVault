@@ -22,20 +22,22 @@ class Library:
   return result
 
  def items(self,ids=None):
-  sql='SELECT p.*,m.status,m.species,m.reviewed_sha,m.updated_at,m.revision,s.flag,s.rating,s.revision AS selection_revision,a.preview AS edit_preview,a.source_sha AS edit_sha,a.revision AS edit_revision,v.hidden,v.revision AS visibility_revision FROM photos p JOIN manual m ON p.id=m.photo_id LEFT JOIN selections s ON s.photo_id=p.id LEFT JOIN adjustments a ON a.photo_id=p.id LEFT JOIN visibility v ON v.photo_id=p.id';args=[]
+  sql='SELECT p.*,m.status,m.species,m.reviewed_sha,m.updated_at,m.revision,s.flag,s.rating,s.revision AS selection_revision,a.preview AS edit_preview,a.source_sha AS edit_sha,a.revision AS edit_revision,v.hidden,v.revision AS visibility_revision,f.value AS feedback_json FROM photos p JOIN manual m ON p.id=m.photo_id LEFT JOIN selections s ON s.photo_id=p.id LEFT JOIN adjustments a ON a.photo_id=p.id LEFT JOIN visibility v ON v.photo_id=p.id LEFT JOIN meta f ON f.key=\'quality_feedback:\'||p.id';args=[]
   if ids is not None:
    if not ids:return []
    sql+=' WHERE p.id IN ('+','.join('?' for _ in ids)+')';args=ids
+  from .quality_feedback import public as feedback_public
   rows=self.db.query(sql+' ORDER BY p.id',args);items=[]
   for r in rows:
    if r['edit_preview'] and r['edit_sha']==r['sha256']:r['thumbnail']=r['edit_preview']
    row=json.loads(r['summary']);row.setdefault('path',r['display_path']);row.setdefault('directory',r['root_id']+'/'+str(Path(r['rel_path']).parent));row.setdefault('views',[])
    stale=bool(r['sha256'] and r['reviewed_sha']!=r['sha256'] and r['status']!='unreviewed')
-   items.append({'id':r['id'],'path':r['display_path'],'root_id':r['root_id'],'relative_path':r['rel_path'],'pipeline':r['pipeline'],'edit_revision':r['edit_revision'] or 0,'source_status':r['source_status'],'inference_status':r['inference_status'],'error':r['error'],'sha256':r['sha256'],'thumbnail':('/thumbs/'+r['thumbnail']) if r['thumbnail'] else None,'visibility':{'hidden':bool(r['hidden']),'revision':r['visibility_revision'] or 0},'selection':{'flag':r['flag'] or 'none','rating':r['rating'] or 0,'revision':r['selection_revision'] or 0},'row':row,'manual':{'status':r['status'],'species':json.loads(r['species']),'reviewed_sha':r['reviewed_sha'],'updated_at':r['updated_at'],'revision':r['revision'],'stale':stale}})
+   items.append({'id':r['id'],'path':r['display_path'],'root_id':r['root_id'],'relative_path':r['rel_path'],'pipeline':r['pipeline'],'edit_revision':r['edit_revision'] or 0,'source_status':r['source_status'],'inference_status':r['inference_status'],'error':r['error'],'sha256':r['sha256'],'thumbnail':('/thumbs/'+r['thumbnail']) if r['thumbnail'] else None,'visibility':{'hidden':bool(r['hidden']),'revision':r['visibility_revision'] or 0},'selection':{'flag':r['flag'] or 'none','rating':r['rating'] or 0,'revision':r['selection_revision'] or 0},'row':row,'quality_feedback':feedback_public(r['feedback_json'],r['sha256'],row.get('quality'),r['edit_revision'] or 0),'manual':{'status':r['status'],'species':json.loads(r['species']),'reviewed_sha':r['reviewed_sha'],'updated_at':r['updated_at'],'revision':r['revision'],'stale':stale}})
   return items
  @staticmethod
  def public(item):
-  row=item['row'];return {k:v for k,v in item.items() if k!='row'}|{'date':row.get('capture_context',{}).get('date'),'context':row.get('capture_context',{}),'exif':row.get('exif',{}),'detection':row.get('detection',{}),'candidates':(row.get('views') or [{}])[0].get('context_candidates',[]),'visual_candidates':(row.get('views') or [{}])[0].get('candidates',[]),'timings':row.get('timings',{}),'adjustments':row.get('adjustments'),'quality':row.get('quality')}
+  from .quality_feedback import key
+  row=item['row'];return {k:v for k,v in item.items() if k!='row'}|{'date':row.get('capture_context',{}).get('date'),'context':row.get('capture_context',{}),'exif':row.get('exif',{}),'detection':row.get('detection',{}),'candidates':(row.get('views') or [{}])[0].get('context_candidates',[]),'visual_candidates':(row.get('views') or [{}])[0].get('candidates',[]),'timings':row.get('timings',{}),'adjustments':row.get('adjustments'),'quality':row.get('quality'),'quality_key':key(row.get('quality'))}
  def match(self,item,filters,labels):
   visibility=filters.get('visibility','visible')
   if visibility not in ('visible','hidden','all'):raise ValueError('隐藏状态筛选无效')

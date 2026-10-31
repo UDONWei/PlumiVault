@@ -29,5 +29,8 @@ BIRD_UPGRADE_STOPPED=1
 bird_compact stop -t 45 app
 bird_compact up -d --no-build --pull never --wait --wait-timeout 150 app
 bird_compact exec -T app python -B -m bird_index.compact --health
+if [ -f models/quality/manifest.json ]; then
+    bird_compact exec -T app python -B /app/tools/verify_quality_runtime.py
+fi
 BIRD_UPGRADE_STOPPED=0
 printf 'Compact services updated; no scan or move started.\n'

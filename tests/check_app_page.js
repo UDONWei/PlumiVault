@@ -24,6 +24,14 @@ const descendants=n=>n.children.flatMap(c=>[c,...descendants(c)]);
 async function until(predicate){const end=Date.now()+6000;while(!predicate()){if(Date.now()>end)throw Error('UI operation timeout: '+el('notice').textContent);await new Promise(r=>setTimeout(r,15));}}
 (async()=>{
  const app=sandbox.window.BirdIndexApp;await app.ready;
+ if(process.argv[3]==='rescan'){
+  app.state.selectedFolders.add('picked');assert.equal(el('task-rescan').checked,false);
+  await el('start-job').click();assert(el('scan-dialog').open);assert(descendants(el('scan-dialog')).find(e=>e.id==='scan-confirm').disabled);el('scan-dialog').close();
+  el('task-rescan').checked=true;await el('task-rescan').events.change();assert(el('start-job').textContent.includes('重新扫描'));
+  await el('start-job').click();const checks=descendants(el('scan-dialog')).filter(e=>e.tagName==='INPUT'&&e.type==='checkbox');assert.equal(checks.length,2);
+  checks[1].checked=false;checks[1].events.change();await descendants(el('scan-dialog')).find(e=>e.id==='scan-confirm').click();
+  assert.equal(el('task-rescan').checked,false);assert(el('notice').textContent.includes('人工记录保留'));console.log('PASS: incremental skip, explicit rescan, subset confirmation and one-shot reset');return;
+ }
  if(process.argv[3]==='unlimited'){
   assert.equal(el('task-limit').value,'0');assert.equal(el('task-limit').max,'');assert.equal(el('task-limit').min,'0');
   const jobs=async()=> (await (await fetch(base+'/api/jobs')).json()).items;

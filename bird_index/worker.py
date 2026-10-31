@@ -18,6 +18,8 @@ def main():
   from context_prior import load_occurrences,resolve_context,rank_scores
   from similarity_features import describe
   started=time.perf_counter();model=LocalBioCLIP(cfg['model_dir'],Path(cfg['labels_path']),Path(cfg['text_features']) if cfg.get('text_features') else None);detector=LocalBirdDetector(Path(cfg['detector_config']));initialization=time.perf_counter()-started
+  from .quality_models import QualityModels
+  quality_models=QualityModels(cfg,model);initialization=time.perf_counter()-started
   occurrences=load_occurrences(Path(cfg['priors_path']));roots={r['id']:r for r in cfg['roots']}
   thumbdir=data/'thumbnails';usage=sum(p.stat().st_size for p in thumbdir.iterdir() if p.is_file());budget=cfg['thumbnail_budget_mb']*1024**2
   from PIL import Image
@@ -64,7 +66,7 @@ def main():
       row['timings']['display_prepare_s']=time.perf_counter()-timing
      if box:view,entry['pixel_box']=crop_box(image,box);entry['normalized_box']=box
      from .quality import assess
-     timing=time.perf_counter();row['quality']=assess(image,box);row['timings']['quality_s']=time.perf_counter()-timing;row['quality'].update(source_sha=before['sha256'],recipe=settings,input='当前解码与调整画面')
+     timing=time.perf_counter();row['quality']=assess(image,box,quality_models);row['timings']['quality_s']=time.perf_counter()-timing;row['quality'].update(source_sha=before['sha256'],recipe=settings,input='当前解码与调整画面；不使用自动增强/降噪预览评分')
      timing=time.perf_counter();row['similarity']['subject']=describe(view) if box else row['similarity']['whole'];row['timings']['similarity_subject_s']=time.perf_counter()-timing;entry['size']=list(view.size);timing=time.perf_counter();model_view=square_input(view) if settings['box'] else view;scores=model.all_scores(model_view);row['timings']['classification_s']=time.perf_counter()-timing
      entry.update(rank_scores(model.labels,scores,row['capture_context'],occurrences,5));entry['all_visual_scores']=scores
      timing=time.perf_counter();after=fingerprint(path,True);row['timings']['source_hash_after_s']=time.perf_counter()-timing;row.update(after=after,source_unchanged=before==after)

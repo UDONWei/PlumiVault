@@ -4,7 +4,10 @@ import numpy as np
 from PIL import Image
 from .common import encode,now
 
-def assess(image,box=None):
+def assess(image,box=None,models=None):
+ if models is not None:
+  from .quality_models import combine
+  return combine(assess(image,box),models.assess(image,box))
  # Fixed analysis scale limits CPU/memory and makes scores comparable within a burst.
  scale=min(1,1024/max(image.size));sample=image.resize((max(1,round(image.width*scale)),max(1,round(image.height*scale))),Image.Resampling.LANCZOS)
  try:
@@ -39,7 +42,10 @@ def score_existing(lib,photo_id,sha):
  if not sha or photo['sha256']!=sha:raise Conflict('照片版本已改变')
  adjustment=lib.adjustment(photo_id)
  if adjustment['source_sha'] not in (None,sha):raise Conflict('旧调整参数已失效，请先确认编辑参数')
- if cached and cached.get('source_sha')==sha and recipe(cached.get('recipe'))==adjustment['recipe']:return {'photo_id':photo_id,'quality':cached,'cached':True}
+ from .quality_models import cache_key
+ model_key=cache_key(lib.cfg)
+ cacheable=cached and (cached.get('ai',{}).get('status') in ('reference','unknown') or model_key.endswith(':missing') and cached.get('ai',{}).get('status')=='unavailable')
+ if cacheable and cached.get('model_key')==model_key and cached.get('source_sha')==sha and recipe(cached.get('recipe'))==adjustment['recipe']:return {'photo_id':photo_id,'quality':cached,'quality_key':photo['quality_key'],'quality_feedback':photo['quality_feedback'],'cached':True}
  if not lib.image_lock.acquire(blocking=False):raise ValueError('正在读取或识别原图，请稍后评分')
  try:
   source=lib.photo_source(photo_id);req={'photo_id':photo_id,'root_id':source['root_id'],'relative_path':source['rel_path'],'display_path':source['display_path'],'expected_sha':sha,'adjustment':adjustment,'detected_box':photo['detection'].get('selected_box')}
@@ -58,4 +64,5 @@ def score_existing(lib,photo_id,sha):
   if full:
    payload=json.loads(full['payload']);payload['quality']=quality;c.execute('UPDATE analyses SET payload=? WHERE photo_id=?',(encode(payload),photo_id))
   lib.db.bump(c)
- return {'photo_id':photo_id,'quality':quality,'cached':False}
+ current=lib.public(lib.items([photo_id])[0])
+ return {'photo_id':photo_id,'quality':quality,'quality_key':current['quality_key'],'quality_feedback':current['quality_feedback'],'cached':False}

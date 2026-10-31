@@ -29,6 +29,7 @@ const api=async(url,value)=>{calls.push({url,value});if(url==='/api/library-fold
 if(url.startsWith('/api/photos?ids='))return {items:structuredClone(photos.filter(p=>url.split('=')[1].split(',').map(Number).includes(p.id)))};
 if(url==='/api/curation-plan')return {plan_id:'synthetic-plan',action:value.action,destination_display:'synthetic quarantine',items:value.ids.map(id=>({source:'synthetic/'+id+'.jpg',destination:'synthetic quarantine/'+id+'.jpg'}))};
 if(url==='/api/curation-commit')return {results:photos.map(p=>({photo_id:p.id,ok:true})),needs_recovery:false};
+if(url==='/api/quality-feedback')return {revision:value.revision+1,values:value.values,stale:false};
 if(url==='/api/quality'){if(failScore&&value.photo_id===2)throw Error('synthetic score failure');return {quality:{score:70,issues:[],exposure:70,limits:'synthetic only'}};}throw Error('Unexpected request '+url);};
 context.window.BirdValidation={init:options=>validationOptions=options,side:()=>{},badge:()=>''};
 vm.createContext(context);vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[2]),'studio-strip.js'),'utf8'),context);vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
@@ -124,5 +125,10 @@ vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(pro
  assert.deepEqual(generated,[1,3]);assert.equal(app.state.busy,false);assert.equal(progress.at(-1).done,2);
  context.window.BirdDisplayPreview.load=async()=>null;await toggle.onclick();assert.equal(nodes.get('s-display-generate').hidden,false);
  assert(nodes.get('s-display-label').textContent.includes('旧缩略图'));assert.deepEqual(errors,['synthetic score failure']);
+ const target=photos.find(p=>p.id===app.state.items[app.state.at].id);target.quality={score:75,technical_score:70,issues:[],exposure:80,limits:'synthetic',ai:{status:'reference',eye:{label:'合成眼部参考',score:80},occlusion:{label:'合成遮挡参考',score:70},posture:{label:'合成姿态参考',score:60}}};target.quality_key='synthetic-key';target.quality_feedback={revision:0,values:{}};
+ await app.refresh();const feedbackPanel=descendants(nodes.get('s-side')).find(n=>n.tagName==='DETAILS'&&n.children[0]?.textContent.startsWith('纠正本次'));
+ assert(feedbackPanel);const feedbackSelects=descendants(feedbackPanel).filter(n=>n.tagName==='SELECT');assert.equal(feedbackSelects.length,4);feedbackSelects[1].value='defocus';
+ await descendants(feedbackPanel).find(n=>n.textContent==='保存这张的纠正').onclick();const saved=calls.at(-1);assert.equal(saved.url,'/api/quality-feedback');assert.equal(saved.value.values.focus,'defocus');assert.equal(saved.value.quality_key,'synthetic-key');assert.equal(app.state.items[app.state.at].quality_feedback.revision,1);
+ assert(descendants(nodes.get('s-side')).some(n=>n.href==='/api/export/quality-feedback'));
  console.log('PASS: thumbnail navigation, culling marks/scores, 13-photo organizer preview/cancel/explicit confirmation; synthetic metadata only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

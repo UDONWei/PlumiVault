@@ -125,6 +125,7 @@ elif a[0]=='compose':
   role=a[-1];result=('old-'+role) if role!='app' else ('new-app' if s['app'] else '')
  elif command=='config' and '--format' in a:result='{}'
  elif command=='build' and stage=='build':code=1
+ elif command=='exec' and '/app/tools/verify_quality_runtime.py' in a and stage=='quality':code=1
  elif command=='rm':
   if mode=='compact':s['app']=False
   else:s['old']=False
@@ -141,6 +142,28 @@ statefile.write_text(json.dumps(s));print(result,end='\n' if result else '');sys
 
 
 class MigrationShellTests(unittest.TestCase):
+    def test_quality_runtime_failure_rolls_back_existing_app(self):
+        shell=os.environ.get('BIRD_SH') or shutil.which('sh')
+        if not shell:self.skipTest('POSIX shell unavailable')
+        for fail in ('','quality'):
+            with tempfile.TemporaryDirectory(prefix='quality-upgrade-') as temp:
+                root=Path(temp);(root/'deploy').mkdir();(root/'config').mkdir();(root/'models/quality').mkdir(parents=True)
+                (root/'models/quality/manifest.json').write_text('{}')
+                for name in ('upgrade-compact.sh','compact-command.sh'):shutil.copyfile(PROJECT/'deploy'/name,root/'deploy'/name)
+                (root/'fake-docker.py').write_text(FAKE_DOCKER,encoding='utf-8')
+                (root/'fake-state.json').write_text(json.dumps({'old':False,'app':True,'restored':False,'calls':[]}))
+                env=dict(os.environ,FAKE_FAIL=fail,BIRD_TEST_PYTHON=Path(sys.executable).as_posix(),MSYS2_ARG_CONV_EXCL='*')
+                env['PATH']=str(Path(shell).parent)+os.pathsep+env.get('PATH','')
+                command='docker() { "$BIRD_TEST_PYTHON" fake-docker.py "$@"; }; . ./deploy/upgrade-compact.sh'
+                run=subprocess.run([shell,'-c',command],cwd=root,env=env,capture_output=True,text=True,timeout=60)
+                state=json.loads((root/'fake-state.json').read_text());calls=state['calls']
+                self.assertEqual(run.returncode==0,not bool(fail),run.stdout+run.stderr)
+                self.assertFalse((root/'config/.compact-operation-lock').exists());self.assertTrue(state['app'])
+                probe=next(i for i,c in enumerate(calls) if '/app/tools/verify_quality_runtime.py' in c)
+                self.assertTrue(any('--health' in c for c in calls[:probe]))
+                tags=[c for c in calls[probe+1:] if c[0]=='tag']
+                self.assertEqual(bool(tags),bool(fail))
+                if fail:self.assertEqual(tags[0],['tag','sha256:synthetic-new-app','plumivault:compact-r12'])
     def run_migration(self,fail=''):
         shell=os.environ.get('BIRD_SH') or shutil.which('sh')
         if not shell:self.skipTest('POSIX shell unavailable')

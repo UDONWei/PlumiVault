@@ -15,4 +15,6 @@ r12 合并方案参考 [Linux Landlock 文档](https://docs.kernel.org/userspace
 
 中国观鸟记录中心的郑四版名录、其快照、名称对照表及未对齐清单不随本仓库分发。需要匹配该名录时，由使用者合法取得资料并私下配置 taxonomy_snapshot；学名精确匹配和人工核对机制保留。不把旧 CC0 数据宣称为该中心最新名录。
 
-实验鸟眼模型不参与生产评分；其权重和个人评估图像不发布，参见 QUALITY_MODEL_EVALUATION.md。项目代码尚未指定整体许可；第三方许可证不会自动给项目整体或模型附带授权。
+r13 使用 [synthet/eye-pose-v0](https://huggingface.co/synthet/eye-pose-v0) 的眼点定位，经维护者选择接入未校准参考分；固定来源及哈希见 AI_QUALITY.md。模型卡标示 MIT，明确只做眼点定位，远距离野外照片效果可能变化；眼部细节是本项目的局部规则，不是上游合焦分类器。遮挡/姿态是本项目对现有 [BioCLIP](https://huggingface.co/imageomics/bioclip) 的零样本文图匹配应用，模型原本侧重生物分类，没有相应专门训练或准确率证明。
+
+导出工具使用 Ultralytics 8.4.189，其代码采用 [AGPL-3.0](https://github.com/ultralytics/ultralytics/blob/main/LICENSE)，不能将眼点模型卡的 MIT 当成对整个依赖链的许可。转换权重仅作为使用者本地安装文件，模型、Ultralytics 代码及私人评估图像不提交公开仓库；再分发需分别核对上游模型和代码条款。项目代码尚未指定整体许可；第三方许可证不会自动给项目整体或模型附带授权。

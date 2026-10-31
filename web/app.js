@@ -121,21 +121,21 @@ async function previewScan(){
  state.scanBusy=true;$('start-job').disabled=true;
  try{
   message('正在检查所选目录的文件名、大小和修改时间，尚未开始识别…');
-  const result=await request('/api/scan-preview',{root_id:$('task-root').value,scopes:[...state.selectedFolders],limit});
-  showScanPlan(result);message('变更检查完成，请核对清单后确认处理。未变化照片不会重新识别。');
+  const result=await request('/api/scan-preview',{root_id:$('task-root').value,scopes:[...state.selectedFolders],limit,rescan:$('task-rescan').checked});
+  showScanPlan(result);message(result.rescan?'重新扫描清单已生成，请核对照片编号和路径后确认。':'变更检查完成，请核对清单后确认处理。未变化照片不会重新识别。');
  }finally{state.scanBusy=false;$('start-job').disabled=false;}
 }
 function showScanPlan(plan){
  const dialog=$('scan-dialog'),c=plan.counts;
- dialog.replaceChildren(node('h3','确认目录变更'),node('p',plan.scopes.join('、')),node('p',`新增 ${c.new} · 更新 ${c.updated} · 待重试 ${c.retry} · 未变化跳过 ${c.unchanged} · 不可用 ${c.unavailable}`),node('small',plan.notice));
+ dialog.replaceChildren(node('h3',plan.rescan?'确认重新扫描所选目录':'确认目录变更'),node('p',plan.scopes.join('、')),node('p',`新增 ${c.new} · 更新 ${c.updated} · 待重试 ${c.retry} · 未变化重扫 ${c.rescan||0} · 未变化跳过 ${c.unchanged} · 不可用 ${c.unavailable}`),node('small',plan.notice));
  if(plan.errors.length)dialog.append(node('p','目录检查不完整：'+plan.errors.join('；'),'warning'));
  if(plan.missing.length){const details=node('details');details.append(node('summary',`已有索引但本次未找到 ${plan.missing.length} 张（检查错误时也可能不可见，不删除索引）`));for(const row of plan.missing)details.append(node('p','#'+row.photo_id+' · '+row.path));dialog.append(details);}
  const chosen=new Set(plan.items.filter((_,i)=>!plan.limit||i<plan.limit).map(p=>p.path));
  const controls=node('div',undefined,'actions'),info=node('strong'),list=node('div',undefined,'scan-files'),pager=node('div',undefined,'actions');let page=0;
- const confirm=button('确认处理',async()=>{
+ const confirm=button(plan.rescan?'确认重新扫描':'确认处理',async()=>{
   if(!chosen.size)throw Error('请先勾选需要处理的变更文件');if(state.scanBusy)return;
   state.scanBusy=true;confirm.disabled=true;
-  try{const r=await request('/api/scan-confirm',{preview_token:plan.preview_token,paths:[...chosen]});dialog.close();await loadJobs();message('已确认处理 '+r.confirmed+' 张；未勾选及未变化照片不处理。');}
+  try{const r=await request('/api/scan-confirm',{preview_token:plan.preview_token,paths:[...chosen]});dialog.close();if(plan.rescan){$('task-rescan').checked=false;$('start-job').textContent='检查勾选目录的新增 / 更新';}await loadJobs();message('已确认处理 '+r.confirmed+' 张；'+(plan.rescan?'仅重新处理清单中勾选的照片，人工记录保留。':'未勾选及未变化照片不处理。'));}
   finally{state.scanBusy=false;confirm.disabled=false;}
  },'primary');confirm.id='scan-confirm';
  function status(){info.textContent='已勾选 '+chosen.size+' / '+plan.items.length+' 张'+(plan.limit?'；本次上限 '+plan.limit:'；不限张数');confirm.disabled=!chosen.size;}
@@ -144,11 +144,11 @@ function showScanPlan(plan){
   for(const [i,p] of plan.items.slice(page*100,page*100+100).entries()){
    const row=node('label',undefined,'scan-file'),check=node('input');check.type='checkbox';check.checked=chosen.has(p.path);
    check.addEventListener('change',()=>{if(check.checked&&plan.limit&&chosen.size>=plan.limit){check.checked=false;message('已达到本次上限；可取消其他勾选或重新检查时调整上限。',true);return;}check.checked?chosen.add(p.path):chosen.delete(p.path);status();});
-   row.append(check,node('span',`${page*100+i+1}. ${p.photo_id?'#'+p.photo_id:'新文件'} · ${{new:'新增',updated:'文件已更新',retry:'未完成/失败，需重试'}[p.reason]} · ${p.path}`));list.append(row);
+   row.append(check,node('span',`${page*100+i+1}. ${p.photo_id?'#'+p.photo_id:'新文件'} · ${{new:'新增',updated:'文件已更新',retry:'未完成/失败，需重试',rescan:'未变化，重新扫描'}[p.reason]} · ${p.path}`));list.append(row);
   }
   pager.replaceChildren(button('上一页',()=>{page=Math.max(0,page-1);render();}),node('span',(page+1)+' / '+Math.max(1,Math.ceil(plan.items.length/100))),button('下一页',()=>{page=Math.min(Math.max(0,Math.ceil(plan.items.length/100)-1),page+1);render();}));status();
  }
- controls.append(button('全选变更（按本次上限）',()=>{chosen.clear();for(const p of plan.items.slice(0,plan.limit||plan.items.length))chosen.add(p.path);render();}),button('清空勾选',()=>{chosen.clear();render();}),info);
+ controls.append(button('全选清单（按本次上限）',()=>{chosen.clear();for(const p of plan.items.slice(0,plan.limit||plan.items.length))chosen.add(p.path);render();}),button('清空勾选',()=>{chosen.clear();render();}),info);
  dialog.append(controls,list,pager,button('取消，不开始处理',()=>dialog.close()),confirm);render();dialog.showModal();
 }
 
@@ -163,6 +163,7 @@ async function loadFolderContext(){const root=$('task-root').value,scope=$('cont
 function loadContext(){const root=state.summary.roots.find(r=>r.id===$('task-root').value);if(!root)return;const c=root.context;$('context-location').value=c.location||'';$('context-region').regionCode=c.region_code||'';$('context-region').value=state.locations?.regions.find(r=>r.kind==='region'&&r.region_code===c.region_code)?.name||c.region_code||'';$('context-date').value=c.date||'';$('context-season').checked=c.use_date!==false;}
 function event(id,type,fn){$(id).addEventListener(type,()=>Promise.resolve(fn()).catch(error));}
 async function main(){
+ event('task-rescan','change',()=>{$('start-job').textContent=$('task-rescan').checked?'检查勾选目录并生成重新扫描清单':'检查勾选目录的新增 / 更新';});
  const labels=await request('/api/labels');state.labels=new Map(labels.items.map(l=>[l.id,l]));state.locations=await request('/api/locations');await updateSummary(true);window.BirdProgress?.init({api:request,onJobs:renderJobs,error});window.BirdStudio?.init({api:request,token:()=>state.token,name,birds:()=>[...state.labels.values()],filters,save,getPhotos,summary:updateSummary,message,error});await refresh();await loadJobs();message('已连接本机图库，人工记录自动保存到数据库。');
  event('refresh','click',()=>{state.offset=0;return refresh();});for(const id of ['folder','state'])event(id,'change',()=>{state.offset=0;return refresh();});event('clear-filter','click',()=>{for(const id of ['folder','search','region','date-from','date-to'])$(id).value='';$('state').value='all';state.species='';state.offset=0;return refresh();});
  event('prev-page','click',()=>{state.offset=Math.max(0,state.offset-state.limit);return refresh();});event('next-page','click',()=>{state.offset+=state.limit;return refresh();});event('start-quick','click',startQuick);event('close-quick','click',exitQuick);event('prev-quick','click',()=>moveQuick(-1));event('next-quick','click',()=>moveQuick(1));event('undo','click',undo);

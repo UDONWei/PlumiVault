@@ -4,6 +4,21 @@ from bird_index.server import Server
 from bird_index.selection import acceptance_report
 
 class ScanHTTPTests(unittest.TestCase):
+ def test_rescan_ui_is_explicit_subset_and_resets_after_submission(self):
+  import os,shutil,subprocess
+  from bird_index.common import PROJECT
+  node=os.environ.get('BIRD_NODE') or shutil.which('node')
+  if not node:self.skipTest('Node unavailable')
+  f=Fixture()
+  for name in ('picked/a.jpg','picked/b.jpg','outside/c.jpg'):f.file(name)
+  f.scan();f.cfg.update(max_files_per_job=0,require_folder_selection=True)
+  server=Server(('127.0.0.1',0),f.lib,f.jobs);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+  try:
+   run=subprocess.run([node,str(PROJECT/'tests/check_app_page.js'),'http://127.0.0.1:'+str(server.server_port),'rescan'],capture_output=True,text=True,encoding='utf-8',timeout=30)
+   self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+   job=next(j for j in f.jobs.list() if j['state']=='queued');self.assertEqual(job['force'],1);self.assertEqual(job['counts']['pending'],1)
+   f.jobs.run_one(job['id']);self.assertEqual(f.processor.calls.count('picked/a.jpg'),2);self.assertEqual(f.processor.calls.count('picked/b.jpg'),1);self.assertEqual(f.processor.calls.count('outside/c.jpg'),1)
+  finally:server.shutdown();server.server_close();thread.join();f.close()
  def test_preview_confirm_auth_guard_and_folder_catalog(self):
   f=Fixture();f.cfg.update(max_files_per_job=0,require_folder_selection=True);f.file('picked/a.jpg')
   server=Server(('127.0.0.1',0),f.lib,f.jobs);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();base='http://127.0.0.1:'+str(server.server_port)
@@ -24,6 +39,12 @@ class ScanHTTPTests(unittest.TestCase):
    f.jobs.run_one(result['id']);status,catalog=call('/api/library-folders');self.assertEqual(catalog['items'][0]['ready'],1)
    status,report=call('/api/acceptance?job='+result['id']);self.assertEqual(status,200);self.assertEqual(report['job']['id'],result['id']);self.assertEqual(report['photos'][0]['measurement_source'],'job_history')
    self.assertEqual(call('/api/acceptance?job=missing')[0],400)
+   self.assertEqual(call('/api/scan-preview',value)[1]['counts']['unchanged'],1)
+   self.assertEqual(call('/api/scan-preview',{**value,'rescan':'true'})[0],400)
+   status,again=call('/api/scan-preview',{**value,'rescan':True});self.assertEqual(again['counts']['rescan'],1)
+   self.assertEqual(call('/api/scan-preview',{**value,'rescan':True},False)[0],403)
+   status,job=call('/api/scan-confirm',{'preview_token':again['preview_token'],'paths':['picked/a.jpg']});self.assertEqual(status,200)
+   f.jobs.run_one(job['id']);self.assertEqual(f.processor.calls.count('picked/a.jpg'),2)
   finally:server.shutdown();server.server_close();thread.join();f.close()
  def test_old_job_report_uses_original_measurement_after_later_analysis(self):
   f=Fixture()

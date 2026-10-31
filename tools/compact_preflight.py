@@ -1,9 +1,14 @@
-"""Run via stdin in the existing index container. Metadata only; no photo probe."""
+"""Run as a file or via stdin. Metadata only; no photo probe."""
 import argparse
 import json
 import os
 from pathlib import Path
 import sqlite3
+import sys
+
+# Direct file execution places /app/tools, not /app, on sys.path. The legacy
+# migration also executes this source via stdin from the application directory.
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]) if globals().get('__file__') not in (None,'<stdin>') else str(Path.cwd()))
 
 
 def check(backup=False):
@@ -18,7 +23,7 @@ def check(backup=False):
         if p.parent.name==str(os.getpid()):continue
         try:args=p.read_bytes().split(b'\0')
         except (FileNotFoundError,PermissionError,ProcessLookupError):continue
-        assert not any(a in (b'bird_index.worker',b'bird_index.preview',b'bird_index.display_preview') for a in args), 'Wait for recognition/preview processes to finish'
+        assert not any(a in (b'bird_index.worker',b'bird_index.preview',b'bird_index.display_preview',b'bird_index.quality_worker') for a in args), 'Wait for recognition/preview/quality processes to finish'
     db=sqlite3.connect('file:/data/index.sqlite3?mode=ro',uri=True)
     try:
         assert not db.execute("SELECT 1 FROM jobs WHERE state IN ('queued','discovering','running','paused') LIMIT 1").fetchone(), 'Finish or cancel pending jobs first'

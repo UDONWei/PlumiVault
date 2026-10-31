@@ -142,6 +142,12 @@ statefile.write_text(json.dumps(s));print(result,end='\n' if result else '');sys
 
 
 class MigrationShellTests(unittest.TestCase):
+    def test_preflight_imports_package_when_launched_outside_app(self):
+        with tempfile.TemporaryDirectory(prefix='preflight-import-') as temp:
+            command='import runpy,sys; runpy.run_path(sys.argv[1],run_name="preflight_import_test"); from bird_index.db import Database; print(Database.__name__)'
+            run=subprocess.run([sys.executable,'-I','-B','-c',command,str(PROJECT/'tools/compact_preflight.py')],cwd=temp,capture_output=True,text=True,timeout=15)
+            self.assertEqual(run.returncode,0,run.stdout+run.stderr);self.assertEqual(run.stdout.strip(),'Database')
+
     def test_quality_runtime_failure_rolls_back_existing_app(self):
         shell=os.environ.get('BIRD_SH') or shutil.which('sh')
         if not shell:self.skipTest('POSIX shell unavailable')
@@ -157,6 +163,10 @@ class MigrationShellTests(unittest.TestCase):
                 command='docker() { "$BIRD_TEST_PYTHON" fake-docker.py "$@"; }; . ./deploy/upgrade-compact.sh'
                 run=subprocess.run([shell,'-c',command],cwd=root,env=env,capture_output=True,text=True,timeout=60)
                 state=json.loads((root/'fake-state.json').read_text());calls=state['calls']
+                preflights=[c for c in calls if '/app/tools/compact_preflight.py' in c]
+                self.assertEqual(len(preflights),2)
+                for call in preflights:
+                    self.assertIn('PYTHONPATH=/app',call);self.assertEqual(call[call.index('PYTHONPATH=/app')-1],'-e')
                 self.assertEqual(run.returncode==0,not bool(fail),run.stdout+run.stderr)
                 self.assertFalse((root/'config/.compact-operation-lock').exists());self.assertTrue(state['app'])
                 probe=next(i for i,c in enumerate(calls) if '/app/tools/verify_quality_runtime.py' in c)

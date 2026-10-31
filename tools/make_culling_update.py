@@ -8,9 +8,10 @@ def build(output,name='culling-r2'):
  for folder in ('bird_index','web','tools','docs','deploy','tests'):
   for p in (ROOT/folder).rglob('*'):
    if p.is_file() and not p.is_symlink() and '__pycache__' not in p.parts and p.suffix in ('.py','.js','.css','.html','.md','.json','.txt','.sh','.yaml','.csv','.tsv'):files.append(p)
- for filename in ('AGENTS.md','README.md','STATUS.md','Dockerfile','Dockerfile.offline','.dockerignore','compose.yaml','compose.offline.yaml','compose.curation.yaml','requirements-linux.lock.txt'):
+ for filename in ('AGENTS.md','README.md','STATUS.md','Dockerfile','Dockerfile.offline','Dockerfile.compact','Dockerfile.compact.dockerignore','.dockerignore','compose.yaml','compose.offline.yaml','compose.curation.yaml','compose.compact.yaml','requirements-linux.lock.txt'):
   p=ROOT/filename
   if p.is_file():files.append(p)
+ files.append(ROOT/'deploy/compact.Caddyfile')
  files=sorted(set(files));archive=output/('bird-index-nas-'+name+'.tar.gz')
  if archive.exists():raise ValueError('交付包已存在，拒绝覆盖；请使用新版本名称')
  with tarfile.open(archive,'w:gz') as tar:

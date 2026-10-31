@@ -1,6 +1,7 @@
 #!/bin/sh
 # User-requested opt-in. No real photo is moved or used for a write probe.
 set -eu
+test ! -f config/compact.enabled || { printf 'Already merged with organizer; use verify-container.\n' >&2; exit 1; }
 . ./deploy/compose-command.sh
 test -f .env
 test -f config/config.json

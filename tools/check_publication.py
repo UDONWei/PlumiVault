@@ -14,7 +14,7 @@ FORBIDDEN_PARTS = {'.git', '.env', 'config', 'app-data', 'data', 'models', 'offl
 ALLOWED_SUFFIXES = {'.py', '.js', '.css', '.html', '.md', '.txt', '.json', '.yaml',
                     '.sh', '.ps1', '.example', '.dockerignore'}
 SPECIAL_NAMES = {'.gitignore', '.gitattributes', '.dockerignore', 'Dockerfile',
-                 'Dockerfile.offline', 'Caddyfile'}
+                 'Dockerfile.offline', 'Dockerfile.compact', 'Caddyfile', 'compact.Caddyfile'}
 PATTERNS = {
     'private_key': r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',
     'github_token': r'\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})\b',

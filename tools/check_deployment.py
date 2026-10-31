@@ -43,3 +43,19 @@ assert organizer['cap_drop']==['ALL'] and organizer['read_only'] is True
 assert all(m['target']!='/photos' for m in organizer['volumes'])
 assert curation['services']['index']=={'environment':{'BIRD_ORGANIZER_URL':'http://organizer:8766'}}
 print('optional curation isolation: passed; NAS rename runtime remains unverified')
+
+compact=yaml.safe_load((ROOT/'compose.compact.yaml').read_text(encoding='utf-8'))
+assert list(compact['services'])==['app']
+app=compact['services']['app'];mounts={m['target']:m for m in app['volumes']}
+assert app['read_only'] is True and app['init'] is True
+assert app['cap_drop']==['ALL'] and app['cap_add']==['NET_BIND_SERVICE']
+assert 'no-new-privileges:true' in app['security_opt'] and not app.get('privileged')
+assert not app.get('network_mode') and not app.get('pid')
+assert mounts['/photos']['read_only'] is True and mounts['/config']['read_only'] is True
+assert mounts['/models']['read_only'] is True and not mounts['/library'].get('read_only')
+assert len(app['ports'])==1 and ':8443:8443' in app['ports'][0]
+assert app['build']['network']=='none' and app['build']['pull'] is False
+assert all(m['bind']['create_host_path'] is False for m in app['volumes'])
+assert not any('docker.sock' in m['target'] for m in app['volumes'])
+assert '\nRUN ' not in (ROOT/'Dockerfile.compact').read_text()
+print('compact static checks: passed; real Landlock/seccomp, Docker and NAS health require migration preflight')

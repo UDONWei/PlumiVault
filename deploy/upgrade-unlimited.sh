@@ -2,6 +2,7 @@
 # Explicit user opt-in: unlimited selected-folder jobs, original mount remains read-only.
 # Source through with-docker-sudo.sh; only Docker is elevated.
 set -eu
+test ! -f config/compact.enabled || { printf 'Already merged; preserve existing limits and use upgrade-culling.\n' >&2; exit 1; }
 test -f .env
 test -f config/config.json
 docker compose -f compose.yaml -f compose.offline.yaml config --quiet

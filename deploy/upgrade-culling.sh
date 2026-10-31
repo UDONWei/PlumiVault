@@ -1,6 +1,10 @@
 #!/bin/sh
 # Called through with-docker-sudo.sh; does not enable organizer or create scans.
 set -eu
+if [ -f config/compact.enabled ]; then
+    . ./deploy/upgrade-compact.sh
+    exit 0
+fi
 . ./deploy/compose-command.sh
 test -f .env
 test -f config/config.json

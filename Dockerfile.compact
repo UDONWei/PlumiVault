@@ -1,0 +1,11 @@
+# Both bases already exist on the NAS. No apt/pip/model download in this build.
+FROM caddy:2.11.7-alpine AS gateway
+FROM bird-index-nas:0.3.0
+COPY --from=gateway /usr/bin/caddy /usr/local/bin/caddy
+COPY bird_index/ /app/bird_index/
+COPY tools/ /app/tools/
+COPY web/ /app/web/
+COPY docs/ /app/docs/
+COPY deploy/compact.Caddyfile /app/deploy/compact.Caddyfile
+HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=3 CMD ["python", "-B", "-m", "bird_index.compact", "--health"]
+CMD ["python", "-B", "-m", "bird_index.compact"]

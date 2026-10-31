@@ -1,6 +1,10 @@
 #!/bin/sh
 # No writes to the real photo tree. Reports configured mount/resource boundaries.
 set -eu
+if [ -f config/compact.enabled ]; then
+    . ./deploy/verify-compact.sh
+    exit 0
+fi
 . ./deploy/compose-command.sh
 bird_compose ps
 CONTAINER=$(bird_compose ps -q index)

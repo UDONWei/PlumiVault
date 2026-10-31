@@ -18,6 +18,9 @@
 **/__pycache__/
 
 !Dockerfile.offline
+!Dockerfile.compact
+!deploy/
+!deploy/compact.Caddyfile
 !offline-build/
 !offline-build/manifest.json
 !offline-build/requirements.offline.lock.txt

@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+test ! -f config/compact.enabled || { printf 'Already merged; use upgrade-culling and verify-container.\n' >&2; exit 1; }
 . ./deploy/compose-command.sh
 BIRD_COMPOSE_ONLINE=1
 test -f .env

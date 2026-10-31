@@ -1,6 +1,6 @@
 """Opt-in original mover. No delete, copy, overwrite or automatic collection.
 
-Run only in the optional organizer container, never grant the index write access.
+Run in the organizer container or the explicitly sandboxed compact organizer process.
 Every execution is journaled before rename; retries reconcile the same operation.
 """
 import contextlib,ctypes,json,os,secrets,stat,threading,time,uuid
@@ -168,8 +168,11 @@ def main():
     if method=='/plan':result=organizer.plan(data['ids'],data['action'])
     elif method=='/commit':result=organizer.commit(data['plan_id'])
     elif method=='/status':result=organizer.status()
+    elif method=='/health':result={'status':'ok','enabled':cfg.get('enabled') is True}
     else:raise ValueError('操作不存在')
    except Exception as exc:code=400;result={'error':str(exc)}
    body=encode(result).encode();self.send_response(code);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
- ThreadingHTTPServer(('0.0.0.0',8766),Handler).serve_forever()
+ host=os.environ.get('BIRD_ORGANIZER_HOST','0.0.0.0')
+ if host not in ('0.0.0.0','127.0.0.1'):raise ValueError('Invalid organizer listen address')
+ ThreadingHTTPServer((host,8766),Handler).serve_forever()
 if __name__=='__main__':main()

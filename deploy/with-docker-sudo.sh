@@ -7,8 +7,8 @@ if [ "$(id -u)" -eq 0 ]; then
     exit 1
 fi
 case "${1:-}" in
-    check-nas|setup-nas|start-nas|start-nas-offline|upgrade-culling|upgrade-unlimited|enable-curation|verify-container) BIRD_DEPLOY_STEP=$1 ;;
-    *) printf 'Usage: sh deploy/with-docker-sudo.sh {check-nas|setup-nas|start-nas|start-nas-offline|upgrade-culling|upgrade-unlimited|enable-curation|verify-container}\n' >&2; exit 1 ;;
+    check-nas|setup-nas|start-nas|start-nas-offline|upgrade-culling|upgrade-unlimited|enable-curation|verify-container|merge-containers|rollback-compact|verify-compact) BIRD_DEPLOY_STEP=$1 ;;
+    *) printf 'Usage: sh deploy/with-docker-sudo.sh {check-nas|setup-nas|start-nas|start-nas-offline|upgrade-culling|upgrade-unlimited|enable-curation|verify-container|merge-containers|rollback-compact|verify-compact}\n' >&2; exit 1 ;;
 esac
 test -f "deploy/$BIRD_DEPLOY_STEP.sh"
 command sudo -v

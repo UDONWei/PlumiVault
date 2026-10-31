@@ -14,6 +14,7 @@ PlumiVault is a local-first bird photo indexing and culling application for NAS,
 - [验证样片标注与导出](docs/VALIDATION_SAMPLES.md)：在工作台选连续组，独立记录清晰度及组内偏好，不接入正式评分。
 - 数据库备份、任务进度、空闲释放识别进程，受限的浏览器原图预览缓存。
 - 可选独立整理服务：清单预览并确认后，移至待删除目录或恢复；不永久删除，不自动清空。
+- 可选[两容器部署](docs/COMPACT_DEPLOYMENT.md)：图库、HTTPS 和整理进程合并为 app，Tailscale 保持独立；强制 Linux 沙箱预检、备份与失败回退，需 NAS 验收。
 
 ## 使用边界
 

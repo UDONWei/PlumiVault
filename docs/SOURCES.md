@@ -1,5 +1,7 @@
 # 来源与许可边界
 
+r12 合并方案参考 [Linux Landlock 文档](https://docs.kernel.org/userspace-api/landlock.html)、[seccomp BPF 文档](https://docs.kernel.org/userspace-api/seccomp_filter.html)、[Linux 6.18 x86_64 系统调用表](https://github.com/torvalds/linux/blob/v6.18/arch/x86/entry/syscalls/syscall_64.tbl) 和 [Docker 多进程容器说明](https://docs.docker.com/engine/containers/multi-service_container/)。Landlock 不覆盖全部元数据操作，代码另加 seccomp 限制；Caddy 证书存储需要 fchmod，因此网关另有读取白名单。运行时仍复用既有 Caddy 2.11.7 与 CPU 依赖，不增加模型或第三方库。
+
 | 组件或数据 | 固定基线与来源 | 说明 |
 | --- | --- | --- |
 | BioCLIP 初代 | [imageomics/bioclip](https://huggingface.co/imageomics/bioclip)，修订 ce901ab3c6a913f9e9ef94ce6d27761069f4f01c | 模型配置与 SHA-256 在 model-bioclip-v1.example.json；权重不分发。官方模型卡标示 MIT，使用前核对上游条款。 |

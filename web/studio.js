@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null,displayMode:"auto",displayTimer:null,displayAbort:null};
+const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null,displayMode:"auto",displayTimer:null,displayAbort:null,zoom:null};
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const btn=(text,fn,cls)=>{const b=el('button',text,cls);b.type='button';b.onclick=(event={})=>Promise.resolve().then(()=>fn(event)).catch(S.options.error);return b;};
 function select(id,title,values){const l=el('label',title),s=el('select');s.id=id;for(const [value,text] of values){const o=el('option',text);o.value=value;s.append(o);}l.append(s);return l;}
@@ -43,7 +43,11 @@ function init(options){
  const toggle=btn('原图',()=>{if(S.busy)return;S.displayMode=S.displayMode==='auto'?'raw':'auto';return loadDisplay();});toggle.id='s-display-mode';toggle.title='同一主体裁切：未调整 / 自动调整';
  const generate=btn('生成此图高清预览',()=>generateDisplay(false));generate.id='s-display-generate';generate.hidden=true;
  const label=el('small','');label.id='s-display-label';label.setAttribute('role','status');nav.append(toggle,generate);stage.append(nav,label);
- const image=el('img');image.id='s-image';image.alt='当前照片（仅在你的浏览器显示）';stage.append(image);const caption=el('div');caption.id='s-caption';stage.append(caption);
+ const image=el('img');image.id='s-image';image.alt='当前照片（仅在你的浏览器显示）';const viewport=el('div',undefined,'studio-viewport');viewport.id='s-viewport';viewport.setAttribute('aria-label','主图：滚轮缩放、放大后拖动、双击切换适应；触屏可双指缩放');image.draggable=false;viewport.append(image);stage.append(viewport);
+ const zoomLabel=el('span','适应');zoomLabel.id='s-zoom-label';zoomLabel.setAttribute('aria-live','polite');
+ nav.append(btn('缩小 −',()=>S.zoom?.step(1/1.4)),zoomLabel,btn('放大 ＋',()=>S.zoom?.step(1.4)),btn('适应窗口',()=>S.zoom?.reset()));
+ S.zoom=window.StudioZoom?.create(viewport,image,zoomLabel);
+ const caption=el('div');caption.id='s-caption';stage.append(caption);
  const right=el('aside',undefined,'studio-side');right.id='s-side';const shell=el('section',undefined,'studio-side-shell');shell.id='s-side-shell';shell.setAttribute('aria-label','照片初筛 · 标记与鸟种');shell.append(right);layout.append(stage,shell);root.append(layout);
  const film=el('div',undefined,'filmstrip');film.id='s-strip';film.setAttribute('aria-label','照片缩略图栏');film.addEventListener('wheel',e=>window.StudioStrip.wheel(e,film),{passive:false});root.append(film);
  const pages=el('div',undefined,'studio-pages');pages.append(btn('上一页',()=>{if(S.offset){S.offset=Math.max(0,S.offset-100);return refresh();}}),el('span'),btn('下一页',()=>{if(S.offset+100<S.total){S.offset+=100;return refresh();}}));pages.children[1].id='s-pages';root.append(pages,el('small','滚轮横移 · Ctrl 多选 · Shift 首尾范围选择（仅可见小图） · ← → 换图 · P 保留 · X 待剔除 · U 清除标记 · 1～5 星 · 0 清除星级。标记后留在当前位置；应用筛选才重排。缩略图可能是主体裁切，核对整图请主动加载原图。'));
@@ -99,7 +103,7 @@ function strip(reveal=false){
 }
 function count(){const ids=visiblePhotos().map(p=>p.id),all=$('s-select-page'),n=ids.filter(id=>S.selected.has(id)).length;all.checked=ids.length>0&&n===ids.length;all.indeterminate=n>0&&n<ids.length;$('studio').querySelector('.studio-count').textContent='已勾选 '+S.selected.size+' 张（折叠组不自动全选）';}
 function display(){
- release();const p=current(),img=$('s-image');img.removeAttribute('src');$('s-side').replaceChildren();$('s-caption').textContent='';$('s-progress').textContent=p?(S.offset+S.at+1)+' / '+S.total:'没有匹配照片';if(!p)return;
+ release();S.zoom?.reset();const p=current(),img=$('s-image');img.removeAttribute('src');$('s-side').replaceChildren();$('s-caption').textContent='';$('s-progress').textContent=p?(S.offset+S.at+1)+' / '+S.total:'没有匹配照片';if(!p)return;
  if(p.thumbnail)img.src=p.thumbnail;pictureSummary();side();
  $('s-display-label').textContent='缩略图';$('s-display-generate').hidden=true;
  $('s-display-mode').textContent=S.displayMode==='auto'?'原图':'自动调整';
@@ -147,7 +151,7 @@ async function loadDisplay(){
   $('s-display-generate').hidden=!!result;
   if(!result){if(S.blob)URL.revokeObjectURL(S.blob);S.blob=null;if(p.thumbnail)$('s-image').src=p.thumbnail;else $('s-image').removeAttribute('src');$('s-display-label').textContent='当前为旧缩略图；点“生成此图高清预览”可补充，无需重新识别。';return;}
   if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(result.blob);$('s-image').src=S.blob;
-  $('s-display-label').textContent=mode==='auto'?'高清主体 · 自动调整（仅显示；判断虚焦请切换原图）':'高清主体 · 原图（同裁切、未调整；RAW 解码预览）';
+  $('s-display-label').textContent=mode==='auto'?'高清主体 · 自动调整＋轻度降噪（判断虚焦请切换原图）':'高清主体 · 原图（同裁切、未调整；RAW 解码预览）';
  }catch(e){if(seq!==S.seq||!S.enabled)return;$('s-display-label').textContent=e.name==='AbortError'?'高清加载超时，可点击切换按钮重试':'高清暂不可用：'+e.message;$('s-display-generate').hidden=false;}
  finally{clearTimeout(deadline);}
 }
@@ -161,7 +165,7 @@ async function generateDisplay(many){
 }
 async function original(){
  const p=current();if(!p||S.busy)return;release();const seq=S.seq,progress=window.BirdProgress?.begin('加载原图预览',1,p.relative_path);let failure=null;try{S.options.message('正在加载适屏预览…');const preview=await window.BirdPreview.load(p,S.options);const blob=preview.blob;if(seq!==S.seq||!S.enabled)return;
- if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(blob);$('s-image').src=S.blob;$('s-display-label').textContent='整张原图 · 未调整；点切换按钮返回主体裁切';S.options.message(preview.cached?'已复用内存中的整图预览，无需重新解码或传图。':'已加载整图预览；最近 3 张在本页内存短暂缓存，不预读下一张。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);}
+ if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(blob);S.zoom?.reset();$('s-image').src=S.blob;$('s-display-label').textContent='整张原图 · 未调整；点切换按钮返回主体裁切';S.options.message(preview.cached?'已复用内存中的整图预览，无需重新解码或传图。':'已加载整图预览；最近 3 张在本页内存短暂缓存，不预读下一张。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);}
 }
 async function editor(){const p=current();if(!p)return;await window.BirdEditor.open(p.id,{api:S.options.api,token:S.options.token,name:S.options.name,birds:S.options.birds,onChanged:async id=>{const fresh=await S.options.api('/api/photos?ids='+id),i=S.items.findIndex(p=>p.id===id);if(i>=0)S.items[i]=fresh.items[0];display();strip();}});}
 async function scoreMany(){

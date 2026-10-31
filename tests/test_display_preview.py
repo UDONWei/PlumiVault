@@ -65,6 +65,27 @@ class DisplayPreviewTests(unittest.TestCase):
             self.assertLessEqual(db.execute('SELECT SUM(bytes) FROM previews').fetchone()[0],cfg['display_preview_budget_mb']*1024**2)
         with self.assertRaises(ValueError):dp.cached(cfg,latest['key'],'raw FROM previews; DROP TABLE previews')
 
+    def test_denoise_flat_noise_edges_and_original_separation(self):
+        rng=np.random.default_rng(17)
+        pixels=np.full((180,240,3),65.,dtype=float);pixels[:,120:,:]=205
+        pixels=np.clip(pixels+rng.normal(0,12,pixels.shape),0,255).astype(np.uint8)
+        with Image.fromarray(pixels) as image:
+            raw=dp.jpeg(image);before=image.tobytes()
+            with dp.enhance(image) as enhanced:
+                clean=np.asarray(enhanced)
+                self.assertLess(clean[15:160,15:100].std(axis=(0,1)).mean(),pixels[15:160,15:100].std(axis=(0,1)).mean())
+                self.assertGreater(float(clean[:,130:200].mean()-clean[:,20:100].mean()),110)
+            entry=dp.store(self.f.cfg,self.sha,None,image)
+            self.assertEqual(dp.cached(self.f.cfg,entry['key'],'raw'),raw)
+            self.assertEqual(image.tobytes(),before)
+            with patch.object(dp,'VERSION','display-v1'):old=dp.cache_key(self.sha,None)
+            self.assertNotEqual(old,entry['key']);self.assertIsNone(dp.cached(self.f.cfg,old))
+
+    def test_browser_studio_zoom(self):
+        node=os.environ.get('BIRD_NODE') or shutil.which('node') or 'node'
+        result=subprocess.run([node,str(PROJECT/'tests/check_studio_zoom.js'),str(PROJECT/'web/studio-zoom.js')],capture_output=True,text=True,encoding='utf-8',timeout=20)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
     def test_explicit_generation_cache_hit_and_versions(self):
         original=digest(self.path);before=self.f.lib.items()[0]
         self.assertFalse(dp.status(self.f.lib,1,self.sha,0)['ready'])

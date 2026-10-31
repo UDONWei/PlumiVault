@@ -16,7 +16,7 @@ from .common import PROJECT, FORMATS, encode, load_config, safe_file
 from .db import Conflict
 from .preview import PreviewBusy
 
-VERSION = 'display-v1'
+VERSION = 'display-v2-denoise'
 EDGE = 2048
 MAX_BYTES = 1024 * 1024
 MODES = ('raw', 'auto')
@@ -37,11 +37,17 @@ def subject(image, box):
 
 
 def enhance(image):
-    """Conservative, adaptive luminance adjustments and mild local clarity, not restoration."""
+    """Light display-only denoising before tone/clarity; never a focus-restoration model."""
     from PIL import Image, ImageFilter, ImageStat
     ycc = image.convert('YCbCr')
     y, cb, cr = ycc.split()
     try:
+        # Partial luminance blending preserves small detail; stronger chroma cleanup
+        # reduces coloured speckles. Work only on the bounded display crop.
+        for channel, strength in ((y, .35), (cb, .75), (cr, .75)):
+            with channel.filter(ImageFilter.MedianFilter(3)) as filtered:
+                with Image.blend(channel, filtered, strength) as cleaned:
+                    channel.paste(cleaned)
         mean = ImageStat.Stat(y).mean[0]/255
         shadows = min(.18, max(.03, (.55-mean)*.35))
         highlights = .10 if mean > .55 else .05

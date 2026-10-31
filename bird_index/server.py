@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
   try:
    parsed=urllib.parse.urlsplit(self.path);path=urllib.parse.unquote(parsed.path);q={k:v[-1] for k,v in urllib.parse.parse_qs(parsed.query).items()};lib=self.server.lib
    if path=='/':return self.send(200,(PROJECT/'web/index.html').read_bytes(),'text/html; charset=utf-8')
-   if path in ('/app.js','/app.css','/editor.js','/preview-cache.js','/display-preview.js','/editor-math.js','/search.js','/studio.js','/studio-strip.js','/validation.js','/studio.css','/progress.js'):
+   if path in ('/app.js','/app.css','/editor.js','/preview-cache.js','/display-preview.js','/editor-math.js','/search.js','/studio.js','/studio-strip.js','/studio-zoom.js','/validation.js','/studio.css','/progress.js'):
     return self.send(200,(PROJECT/'web'/path[1:]).read_bytes(),'text/javascript; charset=utf-8' if path.endswith('.js') else 'text/css; charset=utf-8')
    if path.startswith('/thumbs/'):
     name=path.removeprefix('/thumbs/')

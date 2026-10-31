@@ -95,6 +95,7 @@
     "tests/check_quick_review_core.js",
     "tests/check_studio_strip.js",
     "tests/check_studio_thumbnails.js",
+    "tests/check_studio_zoom.js",
     "tests/check_validation.js",
     "tests/test_context.py",
     "tests/test_crop_preview.py",
@@ -156,6 +157,7 @@
     "web/progress.js",
     "web/search.js",
     "web/studio-strip.js",
+    "web/studio-zoom.js",
     "web/studio.css",
     "web/studio.js",
     "web/validation.js"

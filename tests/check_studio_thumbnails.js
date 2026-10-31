@@ -4,12 +4,15 @@ const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const nodes=new Map(),errors=[],calls=[],progress=[];let failScore=true,bursts=[],validationOptions;
 const descendants=n=>n.children.flatMap(c=>[c,...descendants(c)]);
 class Element{
- constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.attrs={};this.events={};this.className='';this.textContent='';this.value='';this.checked=false;this.hidden=false;this.offsetLeft=0;this.clientWidth=100;this.classList={add:()=>{},remove:()=>{},toggle:()=>{}};}
+ constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.dataset={};this.attrs={};this.events={};this.className='';this.textContent='';this.value='';this.checked=false;this.hidden=false;this.offsetLeft=0;this.clientWidth=100;this.clientHeight=100;this.naturalWidth=400;this.naturalHeight=300;this.style={};this.classList={add:()=>{},remove:()=>{},toggle:()=>{}};}
  set id(value){this._id=value;nodes.set(value,this);}get id(){return this._id;}
  append(...items){for(const item of items){item.parentNode=this;this.children.push(item);}}
  replaceChildren(...items){this.children=[];this.append(...items);}
  before(item){this.parentNode.append(item);}
- setAttribute(k,v){this.attrs[k]=v;}removeAttribute(k){delete this.attrs[k];}
+ setAttribute(k,v){this.attrs[k]=v;}removeAttribute(k){delete this.attrs[k];if(k==='src')delete this.src;}
+ getAttribute(k){return k==='src'?this.src||null:this.attrs[k]||null;}
+ setPointerCapture(){}releasePointerCapture(){}
+ getBoundingClientRect(){return {left:0,top:0,width:this.clientWidth,height:this.clientHeight};}
  addEventListener(name,fn){this.events[name]=fn;}
  querySelector(selector){return descendants(this).find(n=>selector.startsWith('.')?n.className.split(' ').includes(selector.slice(1)):false)||null;}
  scrollTo(value){this.scroll=value;}
@@ -29,8 +32,11 @@ if(url==='/api/curation-commit')return {results:photos.map(p=>({photo_id:p.id,ok
 if(url==='/api/quality'){if(failScore&&value.photo_id===2)throw Error('synthetic score failure');return {quality:{score:70,issues:[],exposure:70,limits:'synthetic only'}};}throw Error('Unexpected request '+url);};
 context.window.BirdValidation={init:options=>validationOptions=options,side:()=>{},badge:()=>''};
 vm.createContext(context);vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[2]),'studio-strip.js'),'utf8'),context);vm.runInContext(fs.readFileSync(process.argv[2],'utf8'),context);
+vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[2]),'studio-zoom.js'),'utf8'),context);
 (async()=>{
  const app=context.window.BirdStudio;app.init({api,name:id=>id,birds:()=>[],filters:()=>app.filters(),token:()=>'',message:()=>{},error:e=>errors.push(e.message),summary:async()=>{}});await app.refresh();
+ assert.equal(nodes.get('s-image').parentNode.id,'s-viewport');
+ await descendants(body).find(n=>n.textContent==='放大 ＋').onclick();assert(app.state.zoom.state().scale>1);
  assert.equal(nodes.get('s-side-shell').tagName,'SECTION','right pane is not collapsed');
  assert.equal(nodes.get('s-directory').children.length,2);
  nodes.get('s-directory').value=JSON.stringify({root:'fixture',subfolder:'synthetic'});
@@ -40,6 +46,7 @@ vm.createContext(context);vm.runInContext(fs.readFileSync(require('path').join(r
  for(const index of [4,8,1,9]){
   await strip.children[index].children[1].onclick({ctrlKey:true});assert.deepEqual(errors,[],'thumbnail click must not report an error');assert.equal(app.state.at,index);assert.equal(strip.scrollLeft,275,'pointer must preserve film position');assert.equal(strip.children.length,10);assert.equal(strip.querySelector('.active').dataset.id,String(index+1));assert.equal(nodes.get('s-image').src,photos[index].thumbnail);assert.equal(nodes.get('s-progress').textContent,`${index+1} / 10`);assert(app.state.selected.has(1));
  }
+ assert.equal(app.state.zoom.state().scale,1,'changing photo resets zoom');
  await strip.children[4].children[1].onclick({ctrlKey:true});
  await descendants(nodes.get('s-side')).find(n=>n.textContent==='保留 P').onclick();
  await descendants(nodes.get('s-side')).find(n=>n.textContent==='4★').onclick();
@@ -108,9 +115,11 @@ vm.createContext(context);vm.runInContext(fs.readFileSync(require('path').join(r
  await strip.children[1].children[1].onclick();const newer=nodes.get('s-image').src;assert(pending.signal.aborted);
  resolveLate({blob:{tag:'stale'}});await late;assert.equal(nodes.get('s-image').src,newer);
  context.window.BirdDisplayPreview.load=async(p,options,mode)=>{displayCalls.push({id:p.id,mode});return {blob:{tag:mode+'-'+p.id}};};
+ app.state.zoom.step(2);
  await toggle.onclick();assert.equal(nodes.get('s-image').src,'blob:auto-'+app.state.items[app.state.at].id);
  await toggle.onclick();assert.equal(nodes.get('s-image').src,'blob:raw-'+app.state.items[app.state.at].id);
  assert(nodes.get('s-display-label').textContent.includes('同裁切、未调整'));
+ assert.equal(app.state.zoom.state().scale,2,'comparison preserves zoom');
  app.state.selected=new Set([1,3]);await descendants(body).find(n=>n.textContent==='补生成勾选图高清预览').onclick();
  assert.deepEqual(generated,[1,3]);assert.equal(app.state.busy,false);assert.equal(progress.at(-1).done,2);
  context.window.BirdDisplayPreview.load=async()=>null;await toggle.onclick();assert.equal(nodes.get('s-display-generate').hidden,false);

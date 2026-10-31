@@ -32,3 +32,9 @@ body.studio-focus{padding:8px 18px}.studio-focus #notice{margin:4px 0;padding:5p
 
 /* Validation labels are private metadata, laid out in normal flow. */
 .validation-panel{padding:8px 12px;background:#263530;margin:6px 0}.validation-panel summary{cursor:pointer}.validation-panel input,.validation-panel select{max-width:100%;margin:4px}.validation-panel p{margin:5px 0}.validation-labels{border-top:1px solid #51685b;margin-top:10px;padding-top:6px}.validation-labels select,.validation-labels input{display:block;width:100%;box-sizing:border-box;margin:5px 0}.film-validation{color:#8fd9f0}
+
+/* r11: the clipped viewport isolates pan/zoom from the right pane and filmstrip. */
+.studio-viewport{position:relative;flex:1 1 0;min-height:0;min-width:0;width:100%;overflow:hidden;touch-action:none;user-select:none;background:#15181c}
+.studio-viewport>img{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;max-height:none;min-height:0;padding:0;object-fit:contain;transform-origin:center;pointer-events:none}
+.studio-viewport>img:not([src]){visibility:hidden}.studio-viewport.zoomed{cursor:grab}.studio-viewport.zoomed:active{cursor:grabbing}
+#s-zoom-label{min-width:3em;text-align:center;font-size:12px}#s-display-label{font-size:11px;color:#b8c3d0}

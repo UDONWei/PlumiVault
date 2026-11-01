@@ -142,5 +142,8 @@ vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(pro
  app.state.zoom.step(.001);assert.equal(app.state.region,null,'zooming out returns to all-bird view');assert(nodes.get('s-caption').textContent.includes('Bird alpha')&&nodes.get('s-caption').textContent.includes('Bird beta'));
  assert.equal(JSON.stringify(target.manual),oldManual);assert.equal(JSON.stringify(target.selection),oldSelection);
  await app.refresh();assert.equal(app.state.items[app.state.at].birds.items[1].species[0],'Bird beta');assert.equal(boxes.children.length,2);assert.deepEqual(errors,['synthetic score failure']);
+ context.fetch=async url=>({ok:true,blob:async()=>({tag:'native-pixels'})});
+ await boxes.children[0].onclick();await descendants(body).find(n=>n.textContent==='原像素裁切').onclick();assert.equal(nodes.get('s-image').src,'blob:native-pixels');assert.equal(app.state.native,true);assert.equal(app.state.region,'left');assert.equal(boxes.children.length,0,'full-frame boxes must not overlay a native crop');
+ await descendants(nodes.get('s-side')).find(n=>n.textContent==='返回全图 · 显示全部鸟种').onclick();assert.equal(app.state.native,false);assert.equal(app.state.region,null);
  console.log('PASS: thumbnail navigation, culling marks/scores, 13-photo organizer preview/cancel/explicit confirmation; synthetic metadata only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

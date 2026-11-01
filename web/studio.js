@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null,displayMode:"auto",displayTimer:null,displayAbort:null,zoom:null,region:null,fullFrame:false};
+const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null,displayMode:"auto",displayTimer:null,displayAbort:null,zoom:null,region:null,fullFrame:false,native:false};
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const btn=(text,fn,cls)=>{const b=el('button',text,cls);b.type='button';b.onclick=(event={})=>Promise.resolve().then(()=>fn(event)).catch(S.options.error);return b;};
 function select(id,title,values){const l=el('label',title),s=el('select');s.id=id;for(const [value,text] of values){const o=el('option',text);o.value=value;s.append(o);}l.append(s);return l;}
@@ -30,7 +30,7 @@ function hide(){document.body.classList.remove('studio-focus');S.enabled=false;r
 async function show(){S.enabled=true;$('quick').hidden=true;if(window.BirdIndexApp)window.BirdIndexApp.state.quick.active=false;await refresh();}
 function init(options){
  S.options=options;const root=$('studio');if(!root)return;
- const modes=el('div',undefined,'studio-switch');modes.append(btn('初筛工作台',show),el('small','空闲待机 · 2 分钟无操作或页面隐藏时停止任务轮询'));
+ const modes=el('div',undefined,'studio-switch');modes.append(btn('初筛工作台',show),el('small','无任务即停止轮询 · 页面隐藏或 2 分钟未操作也停止进度查询'));
  modes.append(btn('专注看图 / 展开目录与更多筛选',()=>document.body.classList.toggle('studio-focus')));document.body.classList.add('studio-focus');$('review-bar').before(modes);
  const directoryBar=el('div',undefined,'studio-directory');directoryBar.append(select('s-directory','初筛目录',[['','全部已索引目录']]));
  const birdLabel=field('s-bird-filter','筛选鸟种');directoryBar.append(birdLabel,btn('清除目录与鸟种',()=>{S.bird='';$('s-bird-filter').value='';$('s-directory').value='';$('folder').value='';S.offset=0;return refresh();}));const filterStatus=el('span');filterStatus.id='s-filter-status';directoryBar.append(filterStatus);root.append(directoryBar);
@@ -47,7 +47,7 @@ function init(options){
  const label=el('small','');label.id='s-display-label';label.setAttribute('role','status');nav.append(toggle,generate);stage.append(nav,label);
  const image=el('img');image.id='s-image';image.alt='当前照片（仅在你的浏览器显示）';const viewport=el('div',undefined,'studio-viewport');viewport.id='s-viewport';viewport.setAttribute('aria-label','主图：滚轮缩放、放大后拖动、双击切换适应；触屏可双指缩放');image.draggable=false;viewport.append(image);const boxes=el('div',undefined,'studio-bird-boxes');boxes.id='s-bird-boxes';viewport.append(boxes);stage.append(viewport);
  const zoomLabel=el('span','适应');zoomLabel.id='s-zoom-label';zoomLabel.setAttribute('aria-live','polite');
- nav.append(btn('缩小 −',()=>S.zoom?.step(1/1.4)),zoomLabel,btn('放大 ＋',()=>S.zoom?.step(1.4)),btn('适应窗口',()=>S.zoom?.reset()));
+ nav.append(btn('原像素裁切',nativePreview),btn('缩小 −',()=>S.native&&S.zoom?.state().scale<=1?returnFull():S.zoom?.step(1/1.4)),zoomLabel,btn('放大 ＋',()=>S.zoom?.step(1.4)),btn('适应窗口',()=>S.native?returnFull():S.zoom?.reset()));
  S.zoom=window.StudioZoom?.create(viewport,image,zoomLabel,paintBirdBoxes);
  const caption=el('div');caption.id='s-caption';stage.append(caption);
  const right=el('aside',undefined,'studio-side');right.id='s-side';const shell=el('section',undefined,'studio-side-shell');shell.id='s-side-shell';shell.setAttribute('aria-label','照片初筛 · 标记与鸟种');shell.append(right);layout.append(stage,shell);root.append(layout);
@@ -108,7 +108,7 @@ function strip(reveal=false){
 }
 function count(){const ids=visiblePhotos().map(p=>p.id),all=$('s-select-page'),n=ids.filter(id=>S.selected.has(id)).length;all.checked=ids.length>0&&n===ids.length;all.indeterminate=n>0&&n<ids.length;$('studio').querySelector('.studio-count').textContent='已勾选 '+S.selected.size+' 张（折叠组不自动全选）';}
 function display(){
- release();S.region=null;S.fullFrame=!!current()?.display_full;S.zoom?.reset();const p=current(),img=$('s-image');img.removeAttribute('src');$('s-side').replaceChildren();$('s-caption').textContent='';$('s-progress').textContent=p?(S.offset+S.at+1)+' / '+S.total:'没有匹配照片';if(!p)return;
+ release();S.native=false;S.region=null;S.fullFrame=!!current()?.display_full;S.zoom?.reset();const p=current(),img=$('s-image');img.removeAttribute('src');$('s-side').replaceChildren();$('s-caption').textContent='';$('s-progress').textContent=p?(S.offset+S.at+1)+' / '+S.total:'没有匹配照片';if(!p)return;
  if(p.thumbnail)img.src=p.thumbnail;pictureSummary();side();S.zoom?.paint();
  $('s-display-label').textContent='缩略图';$('s-display-generate').hidden=true;
  $('s-display-mode').textContent=S.displayMode==='auto'?'原图':'自动调整';
@@ -145,7 +145,7 @@ function side(){
 }
 function paintBirdBoxes(view){
  const layer=$('s-bird-boxes');if(!layer)return;layer.replaceChildren();const p=current();
- if(view.scale===1&&S.region){S.region=null;if($('s-side'))side();}
+ if(view.scale===1&&S.region&&!S.native){S.region=null;if($('s-side'))side();}
  if(!p?.display_full||!S.fullFrame||!$('s-image')?.getAttribute('src'))return;
  layer.style.width=view.width+'px';layer.style.height=view.height+'px';
  layer.style.transform=`translate(-50%,-50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
@@ -164,7 +164,7 @@ function focusRegion(region){
 function birdRegionSide(right,p){
  const regions=p.birds?.items||[],selected=regions.find(r=>r.id===S.region);
  right.append(el('h3',selected?'当前鸟体 · '+regionTitle(selected):'逐只鸟种确认'));
- right.append(btn('返回全图 · 显示全部鸟种',()=>{S.region=null;S.zoom?.reset();side();}));
+ right.append(btn('返回全图 · 显示全部鸟种',returnFull));
  for(const [i,r] of regions.entries())right.append(btn((i+1)+'. '+regionTitle(r),()=>focusRegion(r),r.id===S.region?'selected':''));
  if(p.detection?.classified_regions<regions.length)right.append(el('small','本次已为 '+p.detection.classified_regions+' 个检测框生成独立候选，其余可搜索鸟种并人工确认。'));
  if(p.manual.species.length)right.append(el('small','此前整张照片的人工鸟种仍保留：'+p.manual.species.map(S.options.name).join('、')));
@@ -216,7 +216,16 @@ async function setVisibility(photos,hidden){
  }finally{S.busy=false;}
 }
 function move(delta){if(S.busy)return;const visible=visiblePhotos(),at=visible.findIndex(p=>p.id===current()?.id),p=visible[Math.max(0,Math.min(visible.length-1,at+delta))];if(!p)return;S.at=S.items.findIndex(item=>item.id===p.id);display();strip(true);}
+async function returnFull(){S.native=false;S.region=null;S.zoom?.reset();side();return loadDisplay();}
+async function nativePreview(){
+ const p=current();if(!p||S.busy)return;if(p.display_full&&!S.region){S.options.message('请先点选一只鸟，再加载原像素裁切。');return;}
+ const sequence=++S.seq;clearTimeout(S.displayTimer);S.displayAbort?.abort();const region=S.region,abort=new AbortController();S.displayAbort=abort;const deadline=setTimeout(()=>abort.abort(),120000);
+ $('s-display-label').textContent='正在加载无损原像素裁切缓存…';
+ try{const response=await fetch('/api/native-preview?'+new URLSearchParams({id:p.id,sha:p.sha256,...(region?{region}:{})}),{signal:abort.signal});if(!response.ok)throw Error((await response.json()).error);const blob=await response.blob();if(sequence!==S.seq)return;if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(blob);S.native=true;S.fullFrame=false;S.zoom?.reset();$('s-image').src=S.blob;S.zoom?.paint();$('s-display-label').textContent='原像素裁切 · 无缩小 / 无损 PNG / 未自动调整；适应窗口返回普通预览';
+ }catch(e){if(sequence===S.seq){$('s-display-label').textContent=e.message;S.options.message(e.message);}}finally{clearTimeout(deadline);}
+}
 async function loadDisplay(){
+ S.native=false;
  const p=current();if(!p||!window.BirdDisplayPreview)return;
  clearTimeout(S.displayTimer);S.displayAbort?.abort();const abort=new AbortController();S.displayAbort=abort;const seq=++S.seq,mode=S.displayMode;
  $('s-display-mode').textContent=mode==='auto'?'原图':'自动调整';$('s-display-label').textContent='正在加载'+(mode==='auto'?'自动调整':'未调整')+'主体预览…';

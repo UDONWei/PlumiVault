@@ -66,6 +66,11 @@ class Handler(BaseHTTPRequestHandler):
     from .quality_feedback import export
     return self.send(200,export(lib),download='plumivault-quality-feedback.json')
    if path=='/api/labels':return self.send(200,{'items':list(lib.labels().values())})
+   if path=='/api/native-preview':
+    from .native_preview import read
+    pixels=read(lib,int(q['id']),q['sha'],q.get('region'))
+    if pixels is None:return self.send(404,{'error':'尚无原像素裁切缓存或已淘汰；请手选照片重新扫描生成'})
+    return self.send(200,pixels,'image/png')
    if path=='/api/folders':return self.send(200,folders.listing(lib,q['root'],q.get('parent',''),q.get('offset',0),q.get('sort','date_desc')))
    if path=='/api/library-folders':return self.send(200,{'items':folders.catalog(lib)})
    if path=='/api/folder-context':

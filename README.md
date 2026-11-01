@@ -1,5 +1,7 @@
 # 翎匣 · PlumiVault
 
+r15 增加扫描时的无损原像素主体缓存，点击“原像素裁切”按需加载；无任务即停止定时查询。见 [空闲与缓存说明](docs/NATIVE_PREVIEWS.md)。
+
 r14 增加[多鸟全图与逐只标注](docs/MULTI_BIRD.md)：多个检测框时默认保留整图，虚线框点击放大，各鸟种独立保存，回到全图并列显示。
 
 面向个人 NAS 的鸟类照片索引与初筛程序。Python 后端、浏览器工作台，默认在 NAS 上使用 CPU 本地识别。支持 Sony A7R IV 压缩 ARW，以及 JPEG、PNG、TIFF、WebP、BMP 等普通图片。

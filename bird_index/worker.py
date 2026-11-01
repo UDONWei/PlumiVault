@@ -62,6 +62,11 @@ def main():
      try:
       from .display_preview import subject
       display_view=subject(pristine if pristine is not None else image,box)
+      from .native_preview import store as native_store
+      from .bird_regions import detected as native_regions
+      native_source=pristine if pristine is not None else image
+      native_boxes=[r['box'] for r in native_regions(row)[:16]] if row['multi_display'] else ([box] if box else [])
+      for native_box in native_boxes:native_store(cfg,before['sha256'],native_box,native_source)
      except Exception as exc:entry['display_preview_error']=str(exc)
      finally:
       if pristine is not None:pristine.close();pristine=None

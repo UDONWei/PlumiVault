@@ -1,7 +1,7 @@
 'use strict';
 (() => {
  const targets=['task-progress','editor-task-progress'],listeners=new Set(),local=new Map();
- let options=null,jobs=[],pending=null,timer=null,expiry=null,lastActivity=Date.now(),recent=null,offline=false,sequence=0;
+ let options=null,jobs=[],pending=null,timer=null,expiry=null,lastActivity=Date.now(),recent=null,offline=false,sequence=0,lastQuery=-Infinity;
  const active=j=>['queued','discovering','running','paused'].includes(j.state)||(j.counts?.running||0)>0;
  const processing=j=>['queued','discovering','running'].includes(j.state)||(j.counts?.running||0)>0;
  const rank=j=>(j.counts?.running?0:({running:1,discovering:2,queued:3,paused:4}[j.state]??5));
@@ -42,7 +42,7 @@
  }
  function schedule(){
   clearTimeout(timer);timer=null;
-  if(!options||!awake()){render();return;}
+  if(!options||!awake()||!jobs.some(processing)){render();return;}
   timer=setTimeout(()=>{timer=null;if(awake())refresh().catch(()=>{});else render();},jobs.some(processing)?3000:10000);
  }
  function refresh(){
@@ -51,7 +51,7 @@
   clearTimeout(timer);timer=null;
   pending=(async()=>{
    try{
-    const result=await options.api('/api/jobs');
+    lastQuery=Date.now();const result=await options.api('/api/jobs');
     const before=new Set(jobs.filter(active).map(j=>j.id));jobs=result.items;offline=false;
     const ended=jobs.find(j=>before.has(j.id)&&!active(j));if(ended)remember(describe(ended));
     render();options.onJobs?.(result);
@@ -64,7 +64,7 @@
  }
  function wake(){
   const idle=Date.now()-lastActivity>=120000;lastActivity=Date.now();
-  if(!document.hidden&&(idle||timer===null))refresh().catch(()=>{});
+  if(!document.hidden&&(idle||timer===null&&Date.now()-lastQuery>=10000))refresh().catch(()=>{});
  }
  function init(value){
   if(options)return;options=value;lastActivity=Date.now();

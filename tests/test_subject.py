@@ -12,7 +12,7 @@ class SubjectTests(unittest.TestCase):
  def test_duplicate_and_multiple_birds(self):
   result=choose_subject([{'box':[.1,.1,.3,.3],'score':.9},{'box':[.11,.1,.31,.3],'score':.8},{'box':[.7,.7,.9,.9],'score':.7}])
   self.assertEqual(len(result['detections']),2);self.assertTrue(result['multiple_candidates'])
-  self.assertLessEqual(result['selected_box'][0],.1);self.assertGreaterEqual(result['selected_box'][2],.3)
+  self.assertIsNone(result['selected_box'],'multiple birds must keep the full image')
  def test_square_contains_subject_at_edges_and_preserves_full_size_box(self):
   for box in ([0,0,.1,.2],[.8,.8,1,1],[.1,.1,.3,.15]):
    square=square_box(box,(1000,500))

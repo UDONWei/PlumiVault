@@ -22,17 +22,20 @@ class Library:
   return result
 
  def items(self,ids=None):
-  sql='SELECT p.*,m.status,m.species,m.reviewed_sha,m.updated_at,m.revision,s.flag,s.rating,s.revision AS selection_revision,a.preview AS edit_preview,a.source_sha AS edit_sha,a.revision AS edit_revision,v.hidden,v.revision AS visibility_revision,f.value AS feedback_json FROM photos p JOIN manual m ON p.id=m.photo_id LEFT JOIN selections s ON s.photo_id=p.id LEFT JOIN adjustments a ON a.photo_id=p.id LEFT JOIN visibility v ON v.photo_id=p.id LEFT JOIN meta f ON f.key=\'quality_feedback:\'||p.id';args=[]
+  sql='SELECT p.*,m.status,m.species,m.reviewed_sha,m.updated_at,m.revision,s.flag,s.rating,s.revision AS selection_revision,a.preview AS edit_preview,a.source_sha AS edit_sha,a.revision AS edit_revision,v.hidden,v.revision AS visibility_revision,f.value AS feedback_json,b.value AS birds_json FROM photos p JOIN manual m ON p.id=m.photo_id LEFT JOIN selections s ON s.photo_id=p.id LEFT JOIN adjustments a ON a.photo_id=p.id LEFT JOIN visibility v ON v.photo_id=p.id LEFT JOIN meta f ON f.key=\'quality_feedback:\'||p.id LEFT JOIN meta b ON b.key=\'bird_regions:\'||p.id';args=[]
   if ids is not None:
    if not ids:return []
    sql+=' WHERE p.id IN ('+','.join('?' for _ in ids)+')';args=ids
   from .quality_feedback import public as feedback_public
+  from .bird_regions import scene
   rows=self.db.query(sql+' ORDER BY p.id',args);items=[]
   for r in rows:
    if r['edit_preview'] and r['edit_sha']==r['sha256']:r['thumbnail']=r['edit_preview']
    row=json.loads(r['summary']);row.setdefault('path',r['display_path']);row.setdefault('directory',r['root_id']+'/'+str(Path(r['rel_path']).parent));row.setdefault('views',[])
+   birds=scene(row,r['sha256'],r['birds_json']);multi=len(birds['items'])>1
+   if multi and (not row.get('multi_display') or r['edit_preview']):r['thumbnail']=None
    stale=bool(r['sha256'] and r['reviewed_sha']!=r['sha256'] and r['status']!='unreviewed')
-   items.append({'id':r['id'],'path':r['display_path'],'root_id':r['root_id'],'relative_path':r['rel_path'],'pipeline':r['pipeline'],'edit_revision':r['edit_revision'] or 0,'source_status':r['source_status'],'inference_status':r['inference_status'],'error':r['error'],'sha256':r['sha256'],'thumbnail':('/thumbs/'+r['thumbnail']) if r['thumbnail'] else None,'visibility':{'hidden':bool(r['hidden']),'revision':r['visibility_revision'] or 0},'selection':{'flag':r['flag'] or 'none','rating':r['rating'] or 0,'revision':r['selection_revision'] or 0},'row':row,'quality_feedback':feedback_public(r['feedback_json'],r['sha256'],row.get('quality'),r['edit_revision'] or 0),'manual':{'status':r['status'],'species':json.loads(r['species']),'reviewed_sha':r['reviewed_sha'],'updated_at':r['updated_at'],'revision':r['revision'],'stale':stale}})
+   items.append({'id':r['id'],'path':r['display_path'],'root_id':r['root_id'],'relative_path':r['rel_path'],'pipeline':r['pipeline'],'edit_revision':r['edit_revision'] or 0,'source_status':r['source_status'],'inference_status':r['inference_status'],'error':r['error'],'sha256':r['sha256'],'thumbnail':('/thumbs/'+r['thumbnail']) if r['thumbnail'] else None,'visibility':{'hidden':bool(r['hidden']),'revision':r['visibility_revision'] or 0},'selection':{'flag':r['flag'] or 'none','rating':r['rating'] or 0,'revision':r['selection_revision'] or 0},'row':row,'birds':birds,'display_full':multi,'quality_feedback':feedback_public(r['feedback_json'],r['sha256'],row.get('quality'),r['edit_revision'] or 0),'manual':{'status':r['status'],'species':json.loads(r['species']),'reviewed_sha':r['reviewed_sha'],'updated_at':r['updated_at'],'revision':r['revision'],'stale':stale}})
   return items
  @staticmethod
  def public(item):
@@ -72,6 +75,8 @@ class Library:
   normalize_location=lambda s:re.sub(r'[\s·]|市辖区|省直辖县级行政区划|自治区|特别行政区|省|市','',s).casefold()
   if filters.get('region') and normalize_location(filters['region']) not in normalize_location(context.get('location') or ''):return False
   ids=item['manual']['species'] if status=='confirmed' else [c['label'].get('scientific_name') for c in (item['row'].get('views') or [{}])[0].get('context_candidates',[]) if c['label']['kind']=='bird']
+  from .bird_regions import species as region_species
+  ids=list(dict.fromkeys(ids+region_species(item)))
   if filters.get('species') and filters['species'] not in ids:return False
   q=filters.get('q','').strip().casefold()
   if q:
@@ -102,6 +107,13 @@ class Library:
   return {'total':len(groups),'matched_photos':len(matches),'offset':offset,'limit':limit,'mode':'groups','items':groups[offset:offset+limit]}
  def summary(self):
   rows=self.db.query('SELECT m.status,m.species,m.reviewed_sha,p.sha256,p.source_status FROM manual m JOIN photos p ON p.id=m.photo_id');counts=collections.Counter(r['status'] for r in rows);species=collections.Counter(s for r in rows if r['status']=='confirmed' for s in json.loads(r['species']));labels=self.labels()
+  species=collections.Counter()
+  for r in self.db.query("SELECT p.sha256,m.status,m.species,b.value FROM photos p JOIN manual m ON m.photo_id=p.id LEFT JOIN meta b ON b.key='bird_regions:'||p.id"):
+   record=json.loads(r['value']) if r['value'] else {};ids=set(json.loads(r['species']) if r['status']=='confirmed' else [])
+   if record.get('source_sha')==r['sha256']:
+    for bird in record.get('items',[]):
+     if bird['status']=='confirmed':ids.update(bird['species'])
+   species.update(ids)
   stale=lambda r:bool(r['sha256'] and r['reviewed_sha']!=r['sha256'] and r['status']!='unreviewed')
   return {'library_id':self.db.meta('library_id'),'photos':len(rows),'counts':dict(counts),'stale':sum(stale(r) for r in rows),'pending':sum(r['status'] not in ('confirmed','no_bird') or stale(r) for r in rows),'missing':sum(r['source_status']=='missing' for r in rows),'species':[{'id':id,'name':labels[id]['name'],'count':count} for id,count in species.most_common()],'roots':[self.root(r['id']) for r in self.cfg['roots']],'view':json.loads(self.db.meta('view')),'taxonomy':json.loads(self.db.meta('taxonomy') or '{}'),'max_files_per_job':self.cfg.get('max_files_per_job',10),'generation':int(self.db.meta('generation'))}
  def preferences(self,prefs):
@@ -157,7 +169,8 @@ class Library:
   for p in self.items():
    if not self.match(p,filters,labels):continue
    ctx=p['row'].get('capture_context',{});candidates=(p['row'].get('views') or [{}])[0].get('context_candidates',[]);top=candidates[0]['label'].get('scientific_name','') if candidates else ''
-   for s in p['manual']['species'] or ['']:
+   from .bird_regions import species as region_species
+   for s in list(dict.fromkeys(p['manual']['species']+region_species(p,True))) or ['']:
     writer.writerow([cell(v) for v in (p['path'],p['root_id'],ctx.get('date'),ctx.get('date_source'),ctx.get('location'),p['manual']['status'],labels.get(s,{}).get('name'),s,labels.get(top,{}).get('name',top),p['source_status'],p['manual']['stale'],str(Path(self.root(p['root_id'])['path'])/p['relative_path']),encode(candidates),p['pipeline'],p['selection']['flag'],str(p['selection']['rating']),str((p['row'].get('quality') or {}).get('score','')),'；'.join((p['row'].get('quality') or {}).get('issues',[])),'是' if p['visibility']['hidden'] else '否')])
   return ('\ufeff'+stream.getvalue()).encode('utf-8')
  def context(self,root_id,values,scope=''):

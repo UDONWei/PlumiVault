@@ -11,7 +11,7 @@ def read_page(path):
  return json.loads(match.group(1))
 
 def compact(row):
- data={key:copy.deepcopy(row[key]) for key in ('path','directory','exif','capture_context','before','detection','similarity','views','decode_ok','status','timings','memory','adjustments','decoded_size','quality','decode_route','source_unchanged','decode_breakdown','worker_cpu_s') if key in row}
+ data={key:copy.deepcopy(row[key]) for key in ('path','directory','exif','capture_context','before','detection','similarity','views','decode_ok','status','timings','memory','adjustments','decoded_size','quality','decode_route','source_unchanged','decode_breakdown','worker_cpu_s','multi_display') if key in row}
  for view in data.get('views',[]):view.pop('all_visual_scores',None)
  return data
 

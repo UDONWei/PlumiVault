@@ -29,7 +29,7 @@ def main():
     torch.set_num_threads(cfg['threads']);torch.set_num_interop_threads(1)
     model=LocalBioCLIP(cfg['model_dir'],Path(cfg['labels_path']),Path(cfg['text_features']) if cfg.get('text_features') else None)
    models=QualityModels(cfg,model)
-   row['quality']=assess(image,settings['box'] or req.get('detected_box'),models);row['quality'].update(source_sha=before['sha256'],recipe=settings,input='完整解码与当前调整画面；不使用自动增强/降噪预览评分')
+   row['quality']=assess(image,None if req.get('multi_bird') else settings['box'] or req.get('detected_box'),models);row['quality'].update(source_sha=before['sha256'],recipe=settings,input='完整解码与当前调整画面；不使用自动增强/降噪预览评分')
    after=fingerprint(path,True)
    if before!=after:raise ValueError('评分期间原片变化')
    meter.sample();row.update(after=after,decode_ok=True,source_unchanged=True,adjustments=settings,memory=meter.report());row['timings']['total_s']=time.perf_counter()-start

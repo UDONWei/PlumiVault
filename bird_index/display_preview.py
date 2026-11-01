@@ -130,6 +130,9 @@ def snapshot(lib, photo_id, sha, revision):
     box = adjust['recipe']['box'] or (row.get('detection') or {}).get('selected_box')
     # An explicitly saved reset clears a previous manual crop. Automatic detection remains usable.
     if adjust['revision'] and not adjust['recipe']['box'] and row.get('detection', {}).get('status') == 'manual':box = None
+    from .bird_regions import scene
+    record=lib.db.meta('bird_regions:'+str(photo_id))
+    if len(scene(row,sha,record)['items'])>1:box=None
     box = recipe({'box': box})['box']
     return photo, box, cache_key(sha, box)
 

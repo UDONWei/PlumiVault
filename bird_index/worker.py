@@ -51,10 +51,12 @@ def main():
      row['capture_context']=resolve_context(req['context'],{},row.get('exif',{}),root.get('name',Path(root['path']).name),rel,occurrences['regions']);row['similarity']={'whole':describe(image)};row['timings']['similarity_whole_s']=time.perf_counter()-timing
      timing=time.perf_counter()
      try:
-      row['detection']={'status':'manual','selected_box':settings['box'],'message':'用户手动框选主体'} if settings['box'] else detector.detect(image)
+      row['detection']=detector.detect(image)
+      if settings['box'] and len(row['detection'].get('detections',[]))<2:row['detection']={'status':'manual','selected_box':settings['box'],'message':'用户手动框选主体'}
      except Exception as exc:row['detection']={'status':'error','selected_box':None,'message':'主体检测失败，保留整图待复核','error':str(exc)}
      row['timings']['detection_s']=time.perf_counter()-timing
-     box=row['detection'].get('selected_box');view=image;entry={'name':'subject' if box else 'whole','source':'manual_box' if settings['box'] else 'automatic_bird_detection' if box else 'whole'}
+     row['multi_display']=len(row['detection'].get('detections',[]))>1
+     box=None if row['multi_display'] else row['detection'].get('selected_box');view=image;entry={'name':'subject' if box else 'whole','source':'manual_box' if settings['box'] and box else 'automatic_bird_detection' if box else 'whole'}
      # Use untone pixels for both display variants; never change recognition/quality inputs.
      timing=time.perf_counter()
      try:
@@ -69,6 +71,18 @@ def main():
      timing=time.perf_counter();row['quality']=assess(image,box,quality_models);row['timings']['quality_s']=time.perf_counter()-timing;row['quality'].update(source_sha=before['sha256'],recipe=settings,input='当前解码与调整画面；不使用自动增强/降噪预览评分')
      timing=time.perf_counter();row['similarity']['subject']=describe(view) if box else row['similarity']['whole'];row['timings']['similarity_subject_s']=time.perf_counter()-timing;entry['size']=list(view.size);timing=time.perf_counter();model_view=square_input(view) if settings['box'] else view;scores=model.all_scores(model_view);row['timings']['classification_s']=time.perf_counter()-timing
      entry.update(rank_scores(model.labels,scores,row['capture_context'],occurrences,5));entry['all_visual_scores']=scores
+     # Reuse the decoded pixels/model. Keep one full-frame derivative; each bird
+     # gets independent species candidates, never independent copies of originals.
+     bird_views=[];timing=time.perf_counter()
+     if row['multi_display']:
+      from .bird_regions import detected
+      for region in detected(row)[:16]:
+       cropped,_=crop_box(image,region['box'])
+       with cropped,square_input(cropped) as square:
+        bird_scores=model.all_scores(square)
+       bird_views.append({'name':'bird','region_id':region['id'],'normalized_box':region['box'],'all_visual_scores':bird_scores,**rank_scores(model.labels,bird_scores,row['capture_context'],occurrences,5)})
+      row['detection']['classified_regions']=len(bird_views)
+     row['timings']['bird_regions_s']=time.perf_counter()-timing
      timing=time.perf_counter();after=fingerprint(path,True);row['timings']['source_hash_after_s']=time.perf_counter()-timing;row.update(after=after,source_unchanged=before==after)
      if before!=after:raise ValueError('处理期间源文件变化，结果未采用')
      if display_view is not None:
@@ -85,7 +99,7 @@ def main():
       if usage-old+size>budget:temporary.unlink();raise ValueError('缩略图空间达到配置上限，请调整限额后重试')
       temporary.replace(target);usage+=size-old;entry['thumbnail']={'name':name,'size':list(thumb.size)}
      finally:row['timings']['thumbnail_s']=time.perf_counter()-timing
-     row['views']=[entry];row['status']='needs_review'
+     row['views']=[entry,*bird_views];row['status']='needs_review'
     except Exception as exc:row['error']=f'{type(exc).__name__}: {exc}'
     finally:
      if pristine is not None:pristine.close()

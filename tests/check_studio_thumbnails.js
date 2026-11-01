@@ -29,6 +29,7 @@ const api=async(url,value)=>{calls.push({url,value});if(url==='/api/library-fold
 if(url.startsWith('/api/photos?ids='))return {items:structuredClone(photos.filter(p=>url.split('=')[1].split(',').map(Number).includes(p.id)))};
 if(url==='/api/curation-plan')return {plan_id:'synthetic-plan',action:value.action,destination_display:'synthetic quarantine',items:value.ids.map(id=>({source:'synthetic/'+id+'.jpg',destination:'synthetic quarantine/'+id+'.jpg'}))};
 if(url==='/api/curation-commit')return {results:photos.map(p=>({photo_id:p.id,ok:true})),needs_recovery:false};
+if(url==='/api/bird-region'){const p=photos.find(p=>p.id===value.photo_id),r=p.birds.items.find(r=>r.id===value.region_id);r.status=value.status;r.species=value.species;p.birds.revision++;return structuredClone(p.birds);}
 if(url==='/api/quality-feedback')return {revision:value.revision+1,values:value.values,stale:false};
 if(url==='/api/quality'){if(failScore&&value.photo_id===2)throw Error('synthetic score failure');return {quality:{score:70,issues:[],exposure:70,limits:'synthetic only'}};}throw Error('Unexpected request '+url);};
 context.window.BirdValidation={init:options=>validationOptions=options,side:()=>{},badge:()=>''};
@@ -130,5 +131,16 @@ vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(pro
  assert(feedbackPanel);const feedbackSelects=descendants(feedbackPanel).filter(n=>n.tagName==='SELECT');assert.equal(feedbackSelects.length,4);feedbackSelects[1].value='defocus';
  await descendants(feedbackPanel).find(n=>n.textContent==='保存这张的纠正').onclick();const saved=calls.at(-1);assert.equal(saved.url,'/api/quality-feedback');assert.equal(saved.value.values.focus,'defocus');assert.equal(saved.value.quality_key,'synthetic-key');assert.equal(app.state.items[app.state.at].quality_feedback.revision,1);
  assert(descendants(nodes.get('s-side')).some(n=>n.href==='/api/export/quality-feedback'));
+ // Multi-bird clicks operate on region metadata while photo curation stays intact.
+ target.display_full=true;target.thumbnail='/synthetic/full.jpg';target.birds={revision:0,key:'scene-v1',items:[{id:'left',box:[.1,.1,.3,.4],status:'unreviewed',species:[],candidates:[{label:{kind:'bird',scientific_name:'Bird alpha'}}]},{id:'right',box:[.6,.3,.9,.8],status:'unreviewed',species:[],candidates:[{label:{kind:'bird',scientific_name:'Bird beta'}}]}]};
+ await app.refresh();const boxes=nodes.get('s-bird-boxes');assert.equal(boxes.children.length,2);assert.equal(app.state.zoom.state().scale,1);
+ const oldManual=JSON.stringify(target.manual),oldSelection=JSON.stringify(target.selection);
+ await boxes.children[0].onclick();assert.equal(app.state.region,'left');assert(app.state.zoom.state().scale>1);
+ await descendants(nodes.get('s-side')).find(n=>n.textContent==='Bird alpha').onclick();assert.equal(target.birds.items[0].species[0],'Bird alpha');assert.equal(target.birds.items[1].species.length,0);
+ await descendants(nodes.get('s-side')).find(n=>n.textContent==='返回全图 · 显示全部鸟种').onclick();assert.equal(app.state.region,null);assert.equal(app.state.zoom.state().scale,1);assert.equal(boxes.children.length,2);
+ await boxes.children[1].onclick();assert.equal(app.state.region,'right');await descendants(nodes.get('s-side')).find(n=>n.textContent==='Bird beta').onclick();
+ app.state.zoom.step(.001);assert.equal(app.state.region,null,'zooming out returns to all-bird view');assert(nodes.get('s-caption').textContent.includes('Bird alpha')&&nodes.get('s-caption').textContent.includes('Bird beta'));
+ assert.equal(JSON.stringify(target.manual),oldManual);assert.equal(JSON.stringify(target.selection),oldSelection);
+ await app.refresh();assert.equal(app.state.items[app.state.at].birds.items[1].species[0],'Bird beta');assert.equal(boxes.children.length,2);assert.deepEqual(errors,['synthetic score failure']);
  console.log('PASS: thumbnail navigation, culling marks/scores, 13-photo organizer preview/cancel/explicit confirmation; synthetic metadata only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -23,6 +23,7 @@ zoom.reset();assert.equal(captures.size,0);assert.equal(zoom.state().pointers,0)
 zoom.step(100);assert.equal(zoom.state().scale,8);zoom.step(.0001);assert.equal(zoom.state().scale,1);
 zoom.step(2);imageEvents.load();assert.equal(zoom.state().scale,2,'same-crop comparison preserves magnification');
 view.clientWidth=1200;view.clientHeight=300;resized();assert.equal(zoom.state().x,0);
+view.clientWidth=800;view.clientHeight=600;zoom.focus([.6,.3,.8,.6]);assert(zoom.state().scale>1);assert(zoom.state().x<0,'bird on right is centred');zoom.reset();assert.equal(zoom.state().scale,1);
 image.src='';zoom.reset();zoom.step(2);assert.equal(zoom.state().scale,1,'empty stage ignores zoom');
 events.pointerdown(event({pointerId:9,pointerType:'mouse',button:0}));assert.equal(captures.size,0);
 console.log('PASS: anchored wheel/buttons, bounded pan, double click, pinch/cancel, resize, no-image and source-load zoom preservation; no fetch API available.');

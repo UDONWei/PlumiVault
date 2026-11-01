@@ -1,5 +1,7 @@
 # 翎匣 · PlumiVault
 
+r14 增加[多鸟全图与逐只标注](docs/MULTI_BIRD.md)：多个检测框时默认保留整图，虚线框点击放大，各鸟种独立保存，回到全图并列显示。
+
 面向个人 NAS 的鸟类照片索引与初筛程序。Python 后端、浏览器工作台，默认在 NAS 上使用 CPU 本地识别。支持 Sony A7R IV 压缩 ARW，以及 JPEG、PNG、TIFF、WebP、BMP 等普通图片。
 
 PlumiVault is a local-first bird photo indexing and culling application for NAS, with a browser interface and CPU inference. Photos stay on your own devices.

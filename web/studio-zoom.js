@@ -1,7 +1,7 @@
 'use strict';
 // Client-only transforms: zooming never requests another image or decodes a RAW.
 (() => {
- function create(view,image,label){
+ function create(view,image,label,onChange){
   let scale=1,x=0,y=0;const points=new Map();
   const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
   function bounds(){
@@ -14,6 +14,8 @@
    image.style.transform=`translate(${x}px, ${y}px) scale(${scale})`;
    view.classList.toggle('zoomed',scale>1);label.textContent=scale===1?'适应':scale.toFixed(1)+'×';
    label.title='相对适应窗口的放大倍率；放大不增加图片真实细节';
+   const iw=image.naturalWidth||view.clientWidth,ih=image.naturalHeight||view.clientHeight,fit=Math.min(view.clientWidth/Math.max(1,iw),view.clientHeight/Math.max(1,ih));
+   onChange?.({scale,x,y,width:iw*fit,height:ih*fit});
   }
   function position(clientX,clientY){const r=view.getBoundingClientRect();return {x:clientX-r.left-r.width/2,y:clientY-r.top-r.height/2};}
   function zoom(next,px=0,py=0){
@@ -45,7 +47,13 @@
   for(const event of ['pointerup','pointercancel','lostpointercapture'])view.addEventListener(event,end);
   image.addEventListener('load',paint);image.addEventListener('dragstart',e=>e.preventDefault());
   if(typeof ResizeObserver!=='undefined')new ResizeObserver(paint).observe(view);
-  paint();return {reset,step:factor=>zoom(scale*factor),state:()=>({scale,x,y,pointers:points.size})};
+  function focus(box){
+   if(!image.getAttribute('src'))return;
+   clearPoints();const w=view.clientWidth,h=view.clientHeight,nw=image.naturalWidth||w,nh=image.naturalHeight||h,fit=Math.min(w/nw,h/nh),iw=nw*fit,ih=nh*fit;
+   scale=clamp(Math.min(w/(iw*(box[2]-box[0])*1.3),h/(ih*(box[3]-box[1])*1.3)),1.01,8);
+   x=(.5-(box[0]+box[2])/2)*iw*scale;y=(.5-(box[1]+box[3])/2)*ih*scale;paint();
+  }
+  paint();return {reset,focus,paint,step:factor=>zoom(scale*factor),state:()=>({scale,x,y,pointers:points.size})};
  }
  window.StudioZoom={create};
 })();

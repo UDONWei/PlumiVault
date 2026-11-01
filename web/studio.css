@@ -38,3 +38,7 @@ body.studio-focus{padding:8px 18px}.studio-focus #notice{margin:4px 0;padding:5p
 .studio-viewport>img{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;max-height:none;min-height:0;padding:0;object-fit:contain;transform-origin:center;pointer-events:none}
 .studio-viewport>img:not([src]){visibility:hidden}.studio-viewport.zoomed{cursor:grab}.studio-viewport.zoomed:active{cursor:grabbing}
 #s-zoom-label{min-width:3em;text-align:center;font-size:12px}#s-display-label{font-size:11px;color:#b8c3d0}
+.studio-bird-boxes{position:absolute;left:50%;top:50%;transform-origin:center;pointer-events:none}
+.studio-bird-boxes .studio-bird-box{position:absolute;box-sizing:border-box;border:1.5px dashed #b4f3cb;background:transparent;border-radius:0;padding:0;margin:0;min-width:0;min-height:0;pointer-events:auto;cursor:pointer;color:white}
+.studio-bird-boxes .studio-bird-box.selected{border-color:#ffdc78;background:rgba(255,220,120,.08)}
+.studio-bird-box>span{position:absolute;left:0;top:0;background:rgba(15,25,20,.85);padding:2px 4px;white-space:nowrap;line-height:1.4;max-width:28em;overflow:hidden;text-overflow:ellipsis}

@@ -26,9 +26,9 @@ def choose_subject(proposals, threshold=.35, padding=.18):
     if not kept:return {'status':'no_detection','selected_box':None,'detections':[], 'message':'未定位到可靠鸟体，保留整图；不代表没有鸟'}
     subject=kept[0];x1,y1,x2,y2=subject['box'];dx=(x2-x1)*padding;dy=(y2-y1)*padding
     box=[max(0,x1-dx),max(0,y1-dy),min(1,x2+dx),min(1,y2+dy)]
-    return {'status':'detected','selected_box':box,'detections':kept,'selected_score':subject['score'],
-            'multiple_candidates':len(kept)>1,'selection':'最高检测分数；与鸟种分类及人工真值无关',
-            'message':('检测到多个可能鸟体，当前展示最高分主体，需复核是否漏鸟' if len(kept)>1 else '自动鸟体框外扩 18%，保留身体周边；完整性待复核')}
+    return {'status':'detected','selected_box':box if len(kept)==1 else None,'detections':kept,'selected_score':subject['score'],
+            'multiple_candidates':len(kept)>1,'selection':'多鸟保留整图，逐框分类' if len(kept)>1 else '最高检测分数；与鸟种分类及人工真值无关',
+            'message':('检测到多个可能鸟体，默认保留整图；点击鸟体框逐只确认' if len(kept)>1 else '自动鸟体框外扩 18%，保留身体周边；完整性待复核')}
 
 
 def square_box(box,size):

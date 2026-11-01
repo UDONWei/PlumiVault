@@ -7,7 +7,7 @@ def seconds(row):
  except ValueError:return None
 
 def identity(row,record):
- if record.get('stale'):return None
+ if record.get('stale') or len(row.get('detection',{}).get('detections',[]))>1:return None
  if record['status']=='confirmed':return record['species'][0] if len(record['species'])==1 else None
  if record['status']!='unreviewed' or row.get('detection',{}).get('status') not in ('detected','manual'):return None
  view=(row.get('views') or [{}])[0];c=(view.get('context_candidates') or view.get('candidates') or [{}])[0]

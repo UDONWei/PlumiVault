@@ -126,19 +126,26 @@ class DisplayPreviewTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'原片与索引'):dp.generate(self.f.lib,1,self.sha,0)
         self.assertFalse(dp.cache_path(self.f.cfg).exists())
 
+    def test_multi_scan_keeps_full_preview_and_classifies_each_bird(self):
+        self._probe_scan(multiple=True)
+
     def test_scan_reuses_decode_and_keeps_display_tone_out_of_scoring(self):
+        self._probe_scan()
+
+    def _probe_scan(self,multiple=False):
         import stage1_probe,subject_detector,context_prior,similarity_features,torch
         from bird_index import worker,quality
         from bird_index.adjustments import apply_tone
-        source=Image.new('RGB',(600,400),(60,60,60));before=source.tobytes();seen=[]
+        source=Image.new('RGB',(600,400),(60,60,60));before=source.tobytes();seen=[];classified=[]
         class Model:
             labels=[]
             def __init__(self,*args):pass
-            def all_scores(self,image):return []
+            def all_scores(self,image):classified.append(image.size);return []
         class Detector:
             def __init__(self,*args):pass
-            def detect(self,image):return {'selected_box':[.2,.2,.8,.8]}
+            def detect(self,image):return {'selected_box':None,'detections':[{'box':[.1,.1,.3,.4],'score':.9},{'box':[.6,.3,.9,.8],'score':.8}]} if multiple else {'selected_box':[.2,.2,.8,.8]}
         req={'root_id':'fixture','relative_path':'synthetic.jpg','display_path':'fixture/synthetic.jpg','directory':'fixture','context':{},'adjustment':{'recipe':{'brightness':30}}}
+        if multiple:req['adjustment']['recipe']['box']=[.1,.1,.3,.4]
         output=io.StringIO()
         with contextlib.ExitStack() as stack:
             for obj,name,value in [(stage1_probe,'install_guard',lambda *_:None),(stage1_probe,'LocalBioCLIP',Model),(subject_detector,'LocalBirdDetector',Detector),
@@ -150,6 +157,9 @@ class DisplayPreviewTests(unittest.TestCase):
             worker.main()
         row=json.loads(output.getvalue().splitlines()[-1])['row'];self.assertNotIn('error',row);self.assertEqual(decoded.call_count,1)
         self.assertEqual(source.tobytes(),before);self.assertGreater(seen[0][0],60)
+        if multiple:
+            self.assertTrue(row['multi_display']);self.assertEqual(len(row['views']),3);self.assertEqual(len(classified),3)
+            self.assertEqual(row['views'][0]['display_preview']['size'],[600,400]);self.assertEqual(len({v['region_id'] for v in row['views'][1:]}),2)
         key=row['views'][0]['display_preview']['key']
         with Image.open(io.BytesIO(dp.cached(self.f.cfg,key,'raw'))) as image:self.assertAlmostEqual(ImageStat.Stat(image).mean[0],60,delta=2)
         source.close()

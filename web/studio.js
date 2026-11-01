@@ -1,6 +1,6 @@
 'use strict';
 (() => {
-const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null,displayMode:"auto",displayTimer:null,displayAbort:null,zoom:null};
+const $=id=>document.getElementById(id),S={enabled:true,items:[],at:0,offset:0,total:0,selected:new Set(),busy:false,seq:0,blob:null,options:null,bird:'',folderCatalog:null,groups:[],expanded:new Set(),anchor:null,displayMode:"auto",displayTimer:null,displayAbort:null,zoom:null,region:null,fullFrame:false};
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const btn=(text,fn,cls)=>{const b=el('button',text,cls);b.type='button';b.onclick=(event={})=>Promise.resolve().then(()=>fn(event)).catch(S.options.error);return b;};
 function select(id,title,values){const l=el('label',title),s=el('select');s.id=id;for(const [value,text] of values){const o=el('option',text);o.value=value;s.append(o);}l.append(s);return l;}
@@ -13,7 +13,9 @@ async function loadDirectories(){
  for(const row of result.items){const o=el('option',row.root_name+' / '+(row.path==='.'?'根层文件':row.path)+' · '+row.count+' 张');o.value=JSON.stringify({root:row.root_id,subfolder:row.path});s.append(o);}
  s.value=previous;S.folderCatalog=result.items;
 }
+function regionTitle(r){return r.status==='confirmed'?r.species.map(S.options.name).join('、'):r.status==='no_bird'?'非鸟（人工）':r.status==='uncertain'?'暂不确定':r.candidates?.[0]?.label?.kind==='bird'?S.options.name(r.candidates[0].label.scientific_name)+'（候选）':'鸟种待确认';}
 function birdTitle(p){
+ if(p.display_full)return '多鸟：'+(p.birds?.items||[]).map((r,i)=>(i+1)+'. '+regionTitle(r)).join('、');
  if(p.manual.status==='confirmed'&&p.manual.species.length)return '已确认：'+p.manual.species.map(S.options.name).join('、')+(p.manual.stale?'（源文件变化，需核对）':'');
  if(p.manual.status==='no_bird')return '人工确认无鸟';
  const c=(p.candidates||[])[0],id=c?.label?.scientific_name;
@@ -43,10 +45,10 @@ function init(options){
  const toggle=btn('原图',()=>{if(S.busy)return;S.displayMode=S.displayMode==='auto'?'raw':'auto';return loadDisplay();});toggle.id='s-display-mode';toggle.title='同一主体裁切：未调整 / 自动调整';
  const generate=btn('生成此图高清预览',()=>generateDisplay(false));generate.id='s-display-generate';generate.hidden=true;
  const label=el('small','');label.id='s-display-label';label.setAttribute('role','status');nav.append(toggle,generate);stage.append(nav,label);
- const image=el('img');image.id='s-image';image.alt='当前照片（仅在你的浏览器显示）';const viewport=el('div',undefined,'studio-viewport');viewport.id='s-viewport';viewport.setAttribute('aria-label','主图：滚轮缩放、放大后拖动、双击切换适应；触屏可双指缩放');image.draggable=false;viewport.append(image);stage.append(viewport);
+ const image=el('img');image.id='s-image';image.alt='当前照片（仅在你的浏览器显示）';const viewport=el('div',undefined,'studio-viewport');viewport.id='s-viewport';viewport.setAttribute('aria-label','主图：滚轮缩放、放大后拖动、双击切换适应；触屏可双指缩放');image.draggable=false;viewport.append(image);const boxes=el('div',undefined,'studio-bird-boxes');boxes.id='s-bird-boxes';viewport.append(boxes);stage.append(viewport);
  const zoomLabel=el('span','适应');zoomLabel.id='s-zoom-label';zoomLabel.setAttribute('aria-live','polite');
  nav.append(btn('缩小 −',()=>S.zoom?.step(1/1.4)),zoomLabel,btn('放大 ＋',()=>S.zoom?.step(1.4)),btn('适应窗口',()=>S.zoom?.reset()));
- S.zoom=window.StudioZoom?.create(viewport,image,zoomLabel);
+ S.zoom=window.StudioZoom?.create(viewport,image,zoomLabel,paintBirdBoxes);
  const caption=el('div');caption.id='s-caption';stage.append(caption);
  const right=el('aside',undefined,'studio-side');right.id='s-side';const shell=el('section',undefined,'studio-side-shell');shell.id='s-side-shell';shell.setAttribute('aria-label','照片初筛 · 标记与鸟种');shell.append(right);layout.append(stage,shell);root.append(layout);
  const film=el('div',undefined,'filmstrip');film.id='s-strip';film.setAttribute('aria-label','照片缩略图栏');film.addEventListener('wheel',e=>window.StudioStrip.wheel(e,film),{passive:false});root.append(film);
@@ -106,8 +108,8 @@ function strip(reveal=false){
 }
 function count(){const ids=visiblePhotos().map(p=>p.id),all=$('s-select-page'),n=ids.filter(id=>S.selected.has(id)).length;all.checked=ids.length>0&&n===ids.length;all.indeterminate=n>0&&n<ids.length;$('studio').querySelector('.studio-count').textContent='已勾选 '+S.selected.size+' 张（折叠组不自动全选）';}
 function display(){
- release();S.zoom?.reset();const p=current(),img=$('s-image');img.removeAttribute('src');$('s-side').replaceChildren();$('s-caption').textContent='';$('s-progress').textContent=p?(S.offset+S.at+1)+' / '+S.total:'没有匹配照片';if(!p)return;
- if(p.thumbnail)img.src=p.thumbnail;pictureSummary();side();
+ release();S.region=null;S.fullFrame=!!current()?.display_full;S.zoom?.reset();const p=current(),img=$('s-image');img.removeAttribute('src');$('s-side').replaceChildren();$('s-caption').textContent='';$('s-progress').textContent=p?(S.offset+S.at+1)+' / '+S.total:'没有匹配照片';if(!p)return;
+ if(p.thumbnail)img.src=p.thumbnail;pictureSummary();side();S.zoom?.paint();
  $('s-display-label').textContent='缩略图';$('s-display-generate').hidden=true;
  $('s-display-mode').textContent=S.displayMode==='auto'?'原图':'自动调整';
  if(window.BirdDisplayPreview&&p.sha256&&p.source_status==='available'){
@@ -117,9 +119,11 @@ function display(){
 function side(){
  const p=current();if(!p)return;const right=$('s-side');right.replaceChildren();const sel=p.selection||{flag:'none',rating:0,revision:0};
  right.append(el('h3',birdTitle(p)),el('p',issueTitle(p),'quality-issue'),el('p',({none:'未标记',keep:'✓ 保留',reject:'× 待剔除'}[sel.flag])+' · '+sel.rating+' 星'));
+ if(p.display_full){birdRegionSide(right,p);right.append(el('h3','整张照片标记与评分'));}
  const marks=el('div',undefined,'studio-buttons');for(const [text,flag] of [['保留 P','keep'],['待剔除 X','reject'],['清除 U','none']])marks.append(btn(text,()=>mark(p,flag,null),flag===sel.flag?'selected':''));right.append(marks);
  const stars=el('div',undefined,'studio-buttons');for(let i=0;i<=5;i++)stars.append(btn(i===0?'无星':i+'★',()=>mark(p,null,i),i===sel.rating?'selected':''));right.append(stars);
  window.BirdValidation?.side(right,p);
+ if(p.display_full)right.append(el('small','保留标记、星级和下方评分属于整张照片；单只鸟的鸟种在上方单独确认。'));
  const q=p.quality;right.append(el('h3',q?(q.ai?'AI 综合参考分 ':'技术参考分 ')+q.score+' / 100':'尚未评分'));
  if(q?.ai){
   right.append(el('small','技术基础分 '+q.technical_score+'；AI 结果未校准，人工判断优先。'));
@@ -130,12 +134,57 @@ function side(){
  if(q){right.append(el('small','清晰度 '+(q.clarity??'未知')+' · 曝光 '+q.exposure+' · 构图 '+(q.composition??'未知')));for(const text of q.issues)right.append(el('p',text,'quality-issue'));right.append(el('small',q.limits));}
  else right.append(el('small','勾选后补评分；新处理照片复用解码自动评分。未校准，不依据分数自动删除。'));
  if(q&&p.quality_key)qualityFeedback(right,p);
+ if(!p.display_full){
  right.append(el('h3','鸟种确认'),el('p',p.manual.species.map(S.options.name).join('、')||({unreviewed:'尚未复核',uncertain:'暂不确定',no_bird:'人工确认无鸟',none_match:'候选都不对'}[p.manual.status]||p.manual.status)));
  for(const c of (p.candidates||[]).filter(c=>c.label.kind==='bird').slice(0,5)){const id=c.label.scientific_name;right.append(btn(S.options.name(id),()=>review(p,'confirmed',[id]),p.manual.species.includes(id)?'selected':''));}
  const search=el('input');search.placeholder='汉字、拼音或首字母搜索鸟种';search.setAttribute('aria-label','鸟种搜索');right.append(search);window.BirdSearch.bind(search,right,S.options.birds,l=>review(p,'confirmed',[l.id]));
  right.append(btn(p.visibility?.hidden?'恢复显示此图':'隐藏此图（不移动）',()=>setVisibility([p],!p.visibility?.hidden)));
  right.append(btn('暂不确定',()=>review(p,'uncertain',[])),btn('无鸟（仅分类，不移动）',()=>review(p,'no_bird',[])),btn('清除鸟种确认',()=>review(p,'unreviewed',[])));
+ }
  if(p.source_status==='quarantined')right.append(el('p','原片已暂存。勾选后可恢复；缩略图和人工记录保留。'));
+}
+function paintBirdBoxes(view){
+ const layer=$('s-bird-boxes');if(!layer)return;layer.replaceChildren();const p=current();
+ if(view.scale===1&&S.region){S.region=null;if($('s-side'))side();}
+ if(!p?.display_full||!S.fullFrame||!$('s-image')?.getAttribute('src'))return;
+ layer.style.width=view.width+'px';layer.style.height=view.height+'px';
+ layer.style.transform=`translate(-50%,-50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+ for(const [i,r] of (p.birds?.items||[]).entries()){
+  const b=btn('',()=>focusRegion(r), 'studio-bird-box'+(r.id===S.region?' selected':''));b.dataset.region=r.id;
+  const [x1,y1,x2,y2]=r.box;b.style.left=x1*100+'%';b.style.top=y1*100+'%';b.style.width=(x2-x1)*100+'%';b.style.height=(y2-y1)*100+'%';b.style.borderWidth=1.5/view.scale+'px';
+  const label=el('span',(i+1)+'. '+regionTitle(r));label.style.fontSize=12/view.scale+'px';b.append(label);b.title='点击放大并标注这只鸟：'+regionTitle(r);b.setAttribute('aria-label',b.title);
+  b.addEventListener('pointerdown',e=>e.stopPropagation());b.addEventListener('dblclick',e=>e.stopPropagation());layer.append(b);
+ }
+}
+function focusRegion(region){
+ if(S.busy)return;
+ if(!S.fullFrame||!$('s-image').getAttribute('src')){S.options.message('请先生成此图高清整图预览，再选择鸟体框。');return;}
+ S.region=region.id;S.zoom?.focus(region.box);side();
+}
+function birdRegionSide(right,p){
+ const regions=p.birds?.items||[],selected=regions.find(r=>r.id===S.region);
+ right.append(el('h3',selected?'当前鸟体 · '+regionTitle(selected):'逐只鸟种确认'));
+ right.append(btn('返回全图 · 显示全部鸟种',()=>{S.region=null;S.zoom?.reset();side();}));
+ for(const [i,r] of regions.entries())right.append(btn((i+1)+'. '+regionTitle(r),()=>focusRegion(r),r.id===S.region?'selected':''));
+ if(p.detection?.classified_regions<regions.length)right.append(el('small','本次已为 '+p.detection.classified_regions+' 个检测框生成独立候选，其余可搜索鸟种并人工确认。'));
+ if(p.manual.species.length)right.append(el('small','此前整张照片的人工鸟种仍保留：'+p.manual.species.map(S.options.name).join('、')));
+ if(p.birds.stale_previous)right.append(el('p','原片指纹变化，旧的逐只标注已保留为历史，不套用到当前鸟体。'));
+ if(selected){
+  if(selected.needs_box_review)right.append(el('small','保留了原人工选框；最新检测未可靠对应，请核对是否仍为这只鸟。'));
+  for(const c of selected.candidates||[]){if(c.label.kind!=='bird')continue;const id=c.label.scientific_name;right.append(btn(S.options.name(id),()=>reviewRegion(p,selected,'confirmed',[id]),selected.species.includes(id)?'selected':''));}
+  const search=el('input');search.placeholder='仅标注这只鸟：汉字 / 拼音';search.setAttribute('aria-label','当前鸟体鸟种搜索');right.append(search);
+  window.BirdSearch.bind(search,right,S.options.birds,l=>reviewRegion(p,selected,'confirmed',[l.id]));
+  right.append(btn('这只暂不确定',()=>reviewRegion(p,selected,'uncertain',[])),btn('此框不是鸟',()=>reviewRegion(p,selected,'no_bird',[])),btn('清除此鸟确认',()=>reviewRegion(p,selected,'unreviewed',[])));
+ }else right.append(el('p','点击虚线框或上方编号，放大并单独标注。缩小到适应窗口会回到全图。'));
+ right.append(btn(p.visibility?.hidden?'恢复显示此图':'隐藏此图（不移动）',()=>setVisibility([p],!p.visibility?.hidden)));
+}
+async function reviewRegion(p,region,status,species){
+ if(S.busy)return;S.busy=true;
+ try{
+  p.birds=await S.options.api('/api/bird-region',{photo_id:p.id,source_sha:p.sha256,scene_key:p.birds.key,revision:p.birds.revision,region_id:region.id,status,species});
+  if(!p.birds.items.some(r=>r.id===S.region))S.region=null;
+  side();pictureSummary();strip();S.zoom?.paint();await S.options.summary();S.options.message('这只鸟的鸟种已保存，其他鸟和整张照片的标记、星级保持。');
+ }finally{S.busy=false;}
 }
 function qualityFeedback(right,p){
  const panel=el('details'),record=p.quality_feedback||{revision:0,values:{}},values=record.values||{},inputs={};
@@ -175,9 +224,9 @@ async function loadDisplay(){
  try{
   const result=await window.BirdDisplayPreview.load(p,S.options,mode,abort.signal);if(seq!==S.seq||!S.enabled)return;
   $('s-display-generate').hidden=!!result;
-  if(!result){if(S.blob)URL.revokeObjectURL(S.blob);S.blob=null;if(p.thumbnail)$('s-image').src=p.thumbnail;else $('s-image').removeAttribute('src');$('s-display-label').textContent='当前为旧缩略图；点“生成此图高清预览”可补充，无需重新识别。';return;}
-  if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(result.blob);$('s-image').src=S.blob;
-  $('s-display-label').textContent=mode==='auto'?'高清主体 · 自动调整＋轻度降噪（判断虚焦请切换原图）':'高清主体 · 原图（同裁切、未调整；RAW 解码预览）';
+  if(!result){if(S.blob)URL.revokeObjectURL(S.blob);S.blob=null;if(p.thumbnail)$('s-image').src=p.thumbnail;else $('s-image').removeAttribute('src');$('s-display-label').textContent=p.display_full?'多鸟整图预览尚未缓存，请点“生成此图高清预览”；不会自动读取原片。':'当前为旧缩略图；点“生成此图高清预览”可补充，无需重新识别。';S.zoom?.paint();return;}
+  if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(result.blob);$('s-image').src=S.blob;S.fullFrame=!!p.display_full;S.zoom?.paint();
+  $('s-display-label').textContent=(p.display_full?'多鸟整图 · ': '高清主体 · ')+(mode==='auto'?'自动调整＋轻度降噪（判断虚焦请切换原图）':p.display_full?'原图（整图、未调整；RAW 解码预览）':'原图（同裁切、未调整；RAW 解码预览）');
  }catch(e){if(seq!==S.seq||!S.enabled)return;$('s-display-label').textContent=e.name==='AbortError'?'高清加载超时，可点击切换按钮重试':'高清暂不可用：'+e.message;$('s-display-generate').hidden=false;}
  finally{clearTimeout(deadline);}
 }
@@ -191,7 +240,7 @@ async function generateDisplay(many){
 }
 async function original(){
  const p=current();if(!p||S.busy)return;release();const seq=S.seq,progress=window.BirdProgress?.begin('加载原图预览',1,p.relative_path);let failure=null;try{S.options.message('正在加载适屏预览…');const preview=await window.BirdPreview.load(p,S.options);const blob=preview.blob;if(seq!==S.seq||!S.enabled)return;
- if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(blob);S.zoom?.reset();$('s-image').src=S.blob;$('s-display-label').textContent='整张原图 · 未调整；点切换按钮返回主体裁切';S.options.message(preview.cached?'已复用内存中的整图预览，无需重新解码或传图。':'已加载整图预览；最近 3 张在本页内存短暂缓存，不预读下一张。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);}
+ if(S.blob)URL.revokeObjectURL(S.blob);S.blob=URL.createObjectURL(blob);S.fullFrame=true;S.region=null;S.zoom?.reset();$('s-image').src=S.blob;S.zoom?.paint();side();$('s-display-label').textContent='整张原图 · 未调整；点切换按钮返回主体裁切';S.options.message(preview.cached?'已复用内存中的整图预览，无需重新解码或传图。':'已加载整图预览；最近 3 张在本页内存短暂缓存，不预读下一张。');}catch(e){failure=e;throw e;}finally{progress?.finish(failure);}
 }
 async function editor(){const p=current();if(!p)return;await window.BirdEditor.open(p.id,{api:S.options.api,token:S.options.token,name:S.options.name,birds:S.options.birds,onChanged:async id=>{const fresh=await S.options.api('/api/photos?ids='+id),i=S.items.findIndex(p=>p.id===id);if(i>=0)S.items[i]=fresh.items[0];display();strip();}});}
 async function scoreMany(){

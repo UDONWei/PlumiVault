@@ -48,7 +48,7 @@ def score_existing(lib,photo_id,sha):
  if cacheable and cached.get('model_key')==model_key and cached.get('source_sha')==sha and recipe(cached.get('recipe'))==adjustment['recipe']:return {'photo_id':photo_id,'quality':cached,'quality_key':photo['quality_key'],'quality_feedback':photo['quality_feedback'],'cached':True}
  if not lib.image_lock.acquire(blocking=False):raise ValueError('正在读取或识别原图，请稍后评分')
  try:
-  source=lib.photo_source(photo_id);req={'photo_id':photo_id,'root_id':source['root_id'],'relative_path':source['rel_path'],'display_path':source['display_path'],'expected_sha':sha,'adjustment':adjustment,'detected_box':photo['detection'].get('selected_box')}
+  source=lib.photo_source(photo_id);req={'photo_id':photo_id,'root_id':source['root_id'],'relative_path':source['rel_path'],'display_path':source['display_path'],'expected_sha':sha,'adjustment':adjustment,'detected_box':photo['detection'].get('selected_box'),'multi_bird':photo.get('display_full',False)}
   from .quality_worker import run
   row=run(lib.cfg,req)
   quality=row['quality'];quality.update(created_at=now(),decode_memory=row['memory'])

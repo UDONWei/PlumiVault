@@ -143,6 +143,9 @@ class Handler(BaseHTTPRequestHandler):
    elif path=='/api/quality-feedback':
     from .quality_feedback import save
     result=save(lib,value)
+   elif path=='/api/bird-region':
+    from .bird_regions import save
+    result=save(lib,value)
    elif path=='/api/scan-preview':result=self.server.scan_plans.preview(value['root_id'],value['scopes'],value.get('limit'),value.get('rescan',False))
    elif path=='/api/scan-confirm':result=self.server.scan_plans.commit(value['preview_token'],value['paths'])
    elif path=='/api/jobs':
